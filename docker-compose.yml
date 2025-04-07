@@ -54,7 +54,6 @@ services:
       - ./fe:/app
       - /app/node_modules
 
-
 networks:
   default:
     name: echo_net

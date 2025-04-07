@@ -143,73 +143,59 @@
 .file-icon {
     margin-right: 5px;
 }
+
 /* Base styles (light mode) */
 html, body {
     margin: 0;
     padding: 0;
-    background: #fff; 
+    background: #fff;
     color: #000;
     font-family: sans-serif;
-  }
-  
-  /* Invert them in dark mode */
-  html.dark-mode, 
-  html.dark-mode body {
+}
+
+/* Invert them in dark mode */
+html.dark-mode,
+html.dark-mode body {
     background: #1e1e1e;  /* VSCode-like dark gray */
     color: #d4d4d4;       /* VSCode-like text color */
-  }
-  
-  /* If you have a .navbar or doc-container with backgrounds, invert them: */
-  html.dark-mode .navbar {
+}
+
+/* If you have a .navbar or doc-container with backgrounds, invert them: */
+html.dark-mode .navbar {
     background-color: #1e1e1e;
     border-bottom: 1px solid #444;
-  }
-  
-  html.dark-mode .doc-container {
+}
+
+html.dark-mode .doc-container {
     background-color: #1e1e1e; /* or #000? or #2d2d2d? */
     color: #d4d4d4;
-  }
-  
-  /* For your left pane: */
-  html.dark-mode .doc-left-pane {
+}
+
+/* For your left pane: */
+html.dark-mode .doc-left-pane {
     background-color: #252526; /* A typical VSCode side bar color */
     border-right: 1px solid #444;
-  }
-  
-  /* For your right pane: */
-  html.dark-mode .doc-right-pane {
+}
+
+/* For your right pane: */
+html.dark-mode .doc-right-pane {
     background-color: #1e1e1e;
-  }
-  
-  /* In dark mode, text area background also changes: */
-  html.dark-mode .doc-textarea {
+}
+
+/* In dark mode, text area background also changes: */
+html.dark-mode .doc-textarea {
     background-color: #2d2d2d;
     color: #d4d4d4;
     border: 1px solid #555;
-  }
-  
-  /* Buttons in dark mode could also get a tweak: */
-  html.dark-mode .btn {
+}
+
+/* Buttons in dark mode */
+html.dark-mode .btn {
     background-color: #3c3c3c;
     color: #fff;
     border: 1px solid #555;
-  }
-  
-  html.dark-mode .btn:hover {
+}
+
+html.dark-mode .btn:hover {
     background-color: #4d4d4d;
-  }
-  
-  /* If you want your “commit-btn” (blue) to remain the same color in dark mode, you can skip overriding it, 
-     or define a different shade for dark mode. 
-  */
-  
-  /* If you have icons that are purely black in light mode, 
-     you can invert them by referencing .dark-mode .someClass { color: #fff; } 
-     or rely on 'currentColor' approach. 
-  */
-  
-  /* .dark-mode .navbar .brand, etc. if needed: 
-     but you said colored icons remain the same. 
-     So if they have color="blue", they stay that color. 
-  */
-  
+}
