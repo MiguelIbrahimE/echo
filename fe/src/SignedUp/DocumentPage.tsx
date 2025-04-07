@@ -78,7 +78,7 @@ const DocumentPage: React.FC = () => {
   const [isComplete, setIsComplete] = useState(false);
 
   // We'll store dark mode preference in state
-  const [darkMode, setDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     // read userEmail from localStorage if you store it there
@@ -106,16 +106,13 @@ const DocumentPage: React.FC = () => {
 
   // Toggle dark mode on the entire HTML document
   const toggleDarkMode = () => {
-    setDarkMode(prev => {
-      const newVal = !prev;
-      // Apply or remove 'dark-mode' class on <html>:
-      if (newVal) {
-        document.documentElement.classList.add('dark-mode');
-      } else {
-        document.documentElement.classList.remove('dark-mode');
-      }
-      return newVal;
-    });
+    const html = document.documentElement;
+    if (isDarkMode) {
+      html.classList.remove("dark-mode");
+    } else {
+      html.classList.add("dark-mode");
+    }
+    setIsDarkMode(!isDarkMode);
   };
 
   /**
@@ -309,7 +306,8 @@ const DocumentPage: React.FC = () => {
     <>
       {/* NAVBAR */}
       <nav className="navbar">
-        <h1 className="brand">echo</h1>
+      <a href="/" className="brand" style={{ textDecoration: 'none' , color:'grey'}}>echo</a>
+
         <div className="nav-right">
           {userEmail ? (
             <p>Signed in as: {userEmail}</p>
@@ -318,7 +316,7 @@ const DocumentPage: React.FC = () => {
           )}
           {/* Dark Mode Toggle Button */}
           <button onClick={toggleDarkMode} style={{ marginLeft: '1rem', cursor: 'pointer' }}>
-            {darkMode ? 'Light Mode' : 'Dark Mode'}
+            {isDarkMode ? 'Light Mode' : 'Dark Mode'}
           </button>
         </div>
       </nav>
