@@ -1,63 +1,55 @@
-/* docPage.css */
-
-/* The main container that holds both left & right panes */
+/* If you want the entire container (left + right) to fill the screen: */
 .doc-container {
     display: flex;
-    height: 100vh; /* fill vertical space */
-    font-family: sans-serif; /* or your choice */
+    /* Instead of height: 100vh, subtract your navbar’s height if necessary */
+    height: calc(100vh - 90px); /* for example, if navbar is ~50px tall */
+    font-family: sans-serif;
 }
 
-/* Left Pane (Repository Tree) */
-.doc-left-pane {
-    width: 30%;
-    border-right: 1px solid #ccc;
-    padding: 1rem;
-    overflow-y: auto;
-    background-color: #f3f3f3;
-}
-
-.doc-left-pane h3 {
-    margin-top: 0;
-}
-
-.branch-selector {
-    margin: 0.75rem 0;
-}
-
-.branch-selector select {
-    margin-left: 0.5rem;
-}
-
-/* Right Pane (Documentation Editor) */
+/* The right pane now becomes a column-based flex container. */
 .doc-right-pane {
     width: 70%;
-    padding: 1rem;
     display: flex;
     flex-direction: column;
+    /* Let it fill the parent's height: */
+    height: 100%;
+    box-sizing: border-box;
+    padding: 1rem;
     background-color: #fff;
 }
 
-.doc-right-pane h2 {
-    margin-top: 0;
+/* The new wrapper for the textarea that scrolls if content is large. */
+.editor-content {
+    /* Use flex: 1 to grow and fill vertical space,
+       letting the footer remain at the bottom. */
+    flex: 1;
+    display: flex;
+    /* Let this div scroll if the textarea gets long: */
+    overflow-y: auto;
+    margin-bottom: 1rem;
 }
 
-/* The text area for typing doc content */
+/* The text area itself can also be flex: 1 to fill this 'editor-content' */
 .doc-textarea {
     flex: 1;
-    margin-bottom: 1rem;
     font-size: 16px;
-    resize: none; /* so it doesn’t drag-resize if you prefer */
+    resize: none;
     border: 1px solid #ccc;
     padding: 0.5rem;
     outline: none;
+    /* If you want a maximum height to keep it from being too tall: */
+    /* max-height: 600px; */
+    /* or just let .editor-content do the scrolling. */
 }
 
-/* The bottom bar with “Back” / “Autosaved” / “Commit” */
+/* The footer is now pinned at the bottom of .doc-right-pane
+   because .editor-content flexes above it. */
 .editor-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
+
 
 /* Generic button style */
 .btn {
@@ -121,6 +113,7 @@
     text-align: center;
     margin-right: 3px;
 }
+
 .folder-icon {
     margin-right: 5px;
 }
@@ -198,4 +191,51 @@ html.dark-mode .btn {
 
 html.dark-mode .btn:hover {
     background-color: #4d4d4d;
+}
+/* Simple styling for the preview area */
+.doc-preview {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    background-color: #fafafa;
+    margin-bottom: 1rem;
+    white-space: pre-wrap; /* so new lines appear */
+}
+/* The container holding the user avatar & dropdown toggle */
+.user-profile-container {
+    position: relative;
+    cursor: pointer;
+    margin-left: 1rem;
+}
+
+/* The circular avatar */
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* The dropdown that appears on click */
+.profile-dropdown {
+    position: absolute;
+    top: 40px;    /* just below the avatar */
+    right: 0;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    min-width: 150px;
+    z-index: 1000;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    padding: 0.5rem;
+}
+
+/* Each menu item in the dropdown */
+.profile-dropdown-item {
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.profile-dropdown-item:hover {
+    background-color: #eee;
 }

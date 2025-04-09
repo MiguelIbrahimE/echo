@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-
-// Global + doc page CSS
+import Cookies from 'js-cookie';         // For saving dark-mode preference
 import "../global-css/navbar.css";
 import "./CSS/DocPage.css";
 
@@ -67,15 +66,14 @@ type FolderNode = {
   children: (FolderNode | FileNode)[];
 };
 
-/* ------------------ COMPONENT ------------------ */
 const DocumentPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 1) Check who’s logged in by reading localStorage token
+  // Logged in user
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
 
-  // 2) GitHub-related state
+  // GitHub-related state
   const [token, setToken] = useState('');
   const [repoFullName, setRepoFullName] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -83,23 +81,46 @@ const DocumentPage: React.FC = () => {
   const [treeItems, setTreeItems] = useState<TreeItem[]>([]);
   const [nestedTree, setNestedTree] = useState<(FolderNode | FileNode)[]>([]);
 
-  // 3) Editor
+  // Doc editor
   const [docContent, setDocContent] = useState<string>('');
   const [isAutosaved, setIsAutosaved] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 4) Progress modal for “Generate User Manual”
+  // Progress modal
   const [isGenerating, setIsGenerating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
 
-  // 5) Dark mode
+  // Dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  /* --------------------------------------------------
-   *  useEffect: on mount, parse the token & load data
-   * --------------------------------------------------*/
+  // Preview mode
+  const [isPreview, setIsPreview] = useState(false);
+
+  // **Dropdown** for user profile menu
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  /**
+   *  Simulated properties
+   *  In reality, you'd fetch these from your server or user record:
+   *  e.g. GET /user/me => { hasSubscription: true, apiKeyOnFile: false }
+   */
+  const [hasSubscription, setHasSubscription] = useState<boolean>(false);
+  const [apiKeyOnFile, setApiKeyOnFile] = useState<boolean>(false);
+
+  /**
+   *  Show/hide the "Select plan or add API key" modal
+   */
+  const [showPlanModal, setShowPlanModal] = useState(false);
+
   useEffect(() => {
-    // 1) Parse local JWT to see if we have a logged-in user
+    // 1) Check for dark-mode cookie
+    const darkCookie = Cookies.get('darkMode');
+    if (darkCookie === 'true') {
+      setIsDarkMode(true);
+      document.documentElement.classList.add('dark-mode');
+    }
+
+    // 2) Parse local JWT for user
     const storedToken = localStorage.getItem('myAppToken');
     if (storedToken) {
       const decoded = parseJwt(storedToken);
@@ -107,11 +128,6 @@ const DocumentPage: React.FC = () => {
         setLoggedInUser(decoded.username);
       }
     }
-
-    // 2) Also see if we have a userEmail in localStorage, if needed
-    //    (You can skip if your JWT holds the username.)
-    // const storedEmail = localStorage.getItem('userEmail');
-    // setUserEmail(storedEmail);
 
     // 3) Parse ?repo=?token= from URL
     const params = new URLSearchParams(location.search);
@@ -121,7 +137,7 @@ const DocumentPage: React.FC = () => {
     setRepoFullName(repo);
     setToken(tk);
 
-    // 4) If we have a GitHub token + repo, fetch branch data
+    // 4) Fetch branches if we have a GitHub token + repo
     if (repo && tk) {
       fetchBranches(repo, tk);
     }
@@ -131,24 +147,88 @@ const DocumentPage: React.FC = () => {
     if (savedDoc) {
       setDocContent(savedDoc);
     }
+
+    // 6) In a real app, we might call an endpoint like GET /user/me
+    //    to get these values instead of using local state:
+    //    setHasSubscription(userData.hasSubscription);
+    //    setApiKeyOnFile(userData.apiKeyOnFile);
   }, [location.search]);
 
-  /* --------------------------------------
-   * Toggle entire page between dark/light
-   * --------------------------------------*/
+  /* Toggle Dark Mode */
   const toggleDarkMode = () => {
-    const html = document.documentElement;
     if (isDarkMode) {
-      html.classList.remove("dark-mode");
+      document.documentElement.classList.remove('dark-mode');
+      Cookies.set('darkMode', 'false');
     } else {
-      html.classList.add("dark-mode");
+      document.documentElement.classList.add('dark-mode');
+      Cookies.set('darkMode', 'true');
     }
     setIsDarkMode(!isDarkMode);
   };
 
-  /* --------------------------------------------------
-   * Fetch all branches for the chosen repo
-   * --------------------------------------------------*/
+  /* Toggle Editor vs. Preview */
+  const handlePreviewToggle = () => {
+    setIsPreview(!isPreview);
+  };
+
+  /* Toggle the user profile menu dropdown */
+  const toggleProfileMenu = () => {
+    setIsProfileMenuOpen(!isProfileMenuOpen);
+  };
+
+  /* A simple logout function */
+  const handleLogout = () => {
+    localStorage.removeItem('myAppToken');
+    setLoggedInUser(null);
+    setIsProfileMenuOpen(false);
+    navigate('/');
+  };
+
+  /*
+   * Called in handleGenerateUserManual if user doesn't have subscription nor an API key
+   * Just show a modal giving them the 2 choices:
+   * 1) pay subscription
+   * 2) provide an API key
+   */
+  const openPlanModal = () => {
+    setShowPlanModal(true);
+  };
+
+  const closePlanModal = () => {
+    setShowPlanModal(false);
+  };
+
+  /**
+   * "Subscribe" button
+   * In a real scenario, you'd call /billing/subscribe or something,
+   * then the server updates the user.
+   * Here we just simulate:
+   */
+  const handleSubscribePlan = () => {
+    alert('You are now subscribed at $10/month!');
+    setHasSubscription(true);
+    setShowPlanModal(false);
+  };
+
+  /**
+   * "Save API Key" flow
+   * In a real scenario, you'd call /api/user/set-chatgpt-key
+   * with encryption on the server.
+   */
+  const [tempApiKey, setTempApiKey] = useState('');
+  const handleSaveApiKey = () => {
+    if (!tempApiKey) {
+      alert('Please enter a valid API key!');
+      return;
+    }
+    // In a real scenario: fetch POST to your server to store key encrypted
+    alert('API key saved securely on the server.');
+    setApiKeyOnFile(true);
+    setTempApiKey('');
+    setShowPlanModal(false);
+  };
+
+  /* Fetch branches from GitHub */
   async function fetchBranches(repo: string, accessToken: string) {
     try {
       const [owner, repoName] = repo.split('/');
@@ -162,7 +242,7 @@ const DocumentPage: React.FC = () => {
       const data: Branch[] = await resp.json();
       setBranches(data);
 
-      // default to "main" if present, else the first branch
+      // default to "main" if present, else first
       if (data.length > 0) {
         const main = data.find(b => b.name === 'main') || data[0];
         setSelectedBranch(main.name);
@@ -173,9 +253,7 @@ const DocumentPage: React.FC = () => {
     }
   }
 
-  /* --------------------------------------------------
-   * Fetch entire file tree from GitHub
-   * --------------------------------------------------*/
+  /* Fetch entire file tree from GitHub */
   async function fetchFileTree(repo: string, accessToken: string, commitSha: string) {
     try {
       const [owner, repoName] = repo.split('/');
@@ -193,9 +271,6 @@ const DocumentPage: React.FC = () => {
     }
   }
 
-  /* --------------------------------------------------
-   * Build nested tree from the flat GitHub tree items
-   * --------------------------------------------------*/
   useEffect(() => {
     if (treeItems.length === 0) {
       setNestedTree([]);
@@ -205,9 +280,6 @@ const DocumentPage: React.FC = () => {
     setNestedTree(root);
   }, [treeItems]);
 
-  /* --------------------------------------------------
-   * When branch changes in the <select>
-   * --------------------------------------------------*/
   const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newBranch = e.target.value;
     setSelectedBranch(newBranch);
@@ -217,9 +289,7 @@ const DocumentPage: React.FC = () => {
     }
   };
 
-  /* --------------------------------------------------
-   * Auto-save doc content to localStorage after 1s
-   * --------------------------------------------------*/
+  /* Auto-save doc content to localStorage */
   const handleDocChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setDocContent(newValue);
@@ -234,32 +304,31 @@ const DocumentPage: React.FC = () => {
     }, 1000);
   };
 
-  /* --------------------------------------------------
-   * Utility: fetch a file’s SHA from GitHub
-   * --------------------------------------------------*/
-  const getFileSha = useCallback(async (path: string) => {
-    if (!repoFullName || !token || !selectedBranch) return null;
-    const [owner, repoName] = repoFullName.split('/');
-    const url = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}?ref=${selectedBranch}`;
-    const resp = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!resp.ok) {
-      console.error('Failed to fetch file SHA');
-      return null;
-    }
-    const data = await resp.json();
-    return data.sha;
-  }, [repoFullName, token, selectedBranch]);
+  /* Get a file’s SHA from GitHub */
+  const getFileSha = useCallback(
+      async (path: string) => {
+        if (!repoFullName || !token || !selectedBranch) return null;
+        const [owner, repoName] = repoFullName.split('/');
+        const url = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}?ref=${selectedBranch}`;
+        const resp = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) {
+          console.error('Failed to fetch file SHA');
+          return null;
+        }
+        const data = await resp.json();
+        return data.sha;
+      },
+      [repoFullName, token, selectedBranch]
+  );
 
-  /* --------------------------------------------------
-   * Commit docContent to GitHub (PUT to /contents)
-   * --------------------------------------------------*/
+  /* Commit docContent to GitHub */
   const handleCommitToGithub = useCallback(async () => {
     if (!repoFullName || !token || !selectedBranch) return;
 
-    const path = 'README.md'; // For example, always committing to README
-    const sha = await getFileSha(path); // might be null if file doesn’t exist
+    const path = 'README.md';
+    const sha = await getFileSha(path);
 
     const base64Content = btoa(docContent || '');
     const message = `Update doc from DocumentPage on branch ${selectedBranch}`;
@@ -297,18 +366,27 @@ const DocumentPage: React.FC = () => {
     }
   }, [docContent, repoFullName, selectedBranch, token, getFileSha]);
 
-  /* --------------------------------------------------
-   * Go back in the browser’s history
-   * --------------------------------------------------*/
+  /* Go back in browser history */
   const goBack = () => {
     navigate(-1);
   };
 
-  /* --------------------------------------------------
-   * Generate user manual from the backend
-   * --------------------------------------------------*/
+  /*
+   * Generate user manual
+   * We check if the user has a subscription or an API key.
+   * If not, show the "Select Plan or Provide Key" modal.
+   */
   const handleGenerateUserManual = async () => {
     if (!repoFullName || !token || !selectedBranch) return;
+
+    // 1) Check subscription or personal key
+    if (!hasSubscription && !apiKeyOnFile) {
+      // Show the user the plan modal
+      openPlanModal();
+      return;
+    }
+
+    // 2) If we do have sub or key, proceed normally
     setIsGenerating(true);
     setIsComplete(false);
 
@@ -330,7 +408,6 @@ const DocumentPage: React.FC = () => {
       const data = await response.json();
       console.log('User manual generated:', data);
 
-      // The server might return userManual in different shapes. Adjust as needed:
       let finalText = '';
       if (typeof data.userManual === 'string') {
         finalText = data.userManual;
@@ -353,9 +430,6 @@ const DocumentPage: React.FC = () => {
     setIsGenerating(false);
   };
 
-  /* --------------------------------------------------
-   * Render
-   * --------------------------------------------------*/
   return (
       <>
         {/* NAVBAR */}
@@ -370,9 +444,51 @@ const DocumentPage: React.FC = () => {
           </a>
 
           <div className="nav-right">
-            {/* Show “Signed in as: ____” if we have a user, otherwise “Not signed in” */}
             {loggedInUser ? (
-                <p>Signed in as: {loggedInUser}</p>
+                <div className="user-profile-container" onClick={toggleProfileMenu}>
+                  <img
+                      src="https://via.placeholder.com/32?text=User"
+                      alt="User Profile"
+                      className="user-avatar"
+                  />
+                  {isProfileMenuOpen && (
+                      <div className="profile-dropdown" onClick={(e) => e.stopPropagation()}>
+                        <div
+                            className="profile-dropdown-item"
+                            onClick={() => {
+                              setIsProfileMenuOpen(false);
+                              navigate('/dashboard');
+                            }}
+                        >
+                          Dashboard
+                        </div>
+                        <div
+                            className="profile-dropdown-item"
+                            onClick={() => {
+                              setIsProfileMenuOpen(false);
+                              navigate('/document-page');
+                            }}
+                        >
+                          My Documents
+                        </div>
+                        <div
+                            className="profile-dropdown-item"
+                            onClick={() => {
+                              setIsProfileMenuOpen(false);
+                              navigate('/settings');
+                            }}
+                        >
+                          Settings
+                        </div>
+                        <div
+                            className="profile-dropdown-item"
+                            onClick={handleLogout}
+                        >
+                          Logout
+                        </div>
+                      </div>
+                  )}
+                </div>
             ) : (
                 <p>Not signed in</p>
             )}
@@ -417,21 +533,26 @@ const DocumentPage: React.FC = () => {
           {/* RIGHT PANE = Documentation Editor */}
           <div className="doc-right-pane">
             <h2>Documentation Editor</h2>
-            <textarea
-                className="doc-textarea"
-                placeholder="Type your doc here..."
-                value={docContent}
-                onChange={handleDocChange}
-            />
+
+            {!isPreview ? (
+                <textarea
+                    className="doc-textarea"
+                    placeholder="Type your doc here..."
+                    value={docContent}
+                    onChange={handleDocChange}
+                />
+            ) : (
+                <div className="doc-preview">{docContent}</div>
+            )}
+
             <div className="editor-footer">
-              <button className="btn" onClick={goBack}>Back</button>
-              {isAutosaved ? (
-                  <span className="autosave-status">Autosaved</span>
-              ) : (
-                  <span className="autosave-status typing">Typing...</span>
-              )}
+
+
+              <button className="btn preview-btn" onClick={handlePreviewToggle}>
+                {isPreview ? 'Edit Mode' : 'Preview'}
+              </button>
               <button className="btn commit-btn" onClick={handleCommitToGithub}>
-                Commit to GitHub
+                Commit
               </button>
               <button className="btn generate-btn" onClick={handleGenerateUserManual}>
                 Generate User Manual
@@ -439,16 +560,62 @@ const DocumentPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/*
+        This modal appears if user has neither subscription nor an API key.
+        They can subscribe for $10 or provide an API key to store.
+      */}
+        {showPlanModal && (
+            <div className="modal-overlay" onClick={closePlanModal}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <h2>Select a Plan or Provide Your API Key</h2>
+                <p>To use AI-based manual generation, you need either:</p>
+                <ul>
+                  <li>A monthly subscription ($10/mo)</li>
+                  <li>Or your own ChatGPT API key (stored securely)</li>
+                </ul>
+                <button className="btn" onClick={handleSubscribePlan}>
+                  Subscribe for $10/month
+                </button>
+
+                <hr />
+
+                <p style={{ marginTop: '1rem' }}>
+                  Or enter your own ChatGPT API key below:
+                </p>
+                <input
+                    type="text"
+                    placeholder="sk-..."
+                    value={tempApiKey}
+                    onChange={(e) => setTempApiKey(e.target.value)}
+                    style={{
+                      width: '100%',
+                      marginBottom: '0.5rem',
+                      padding: '0.4rem',
+                      boxSizing: 'border-box'
+                    }}
+                />
+                <button className="btn" onClick={handleSaveApiKey}>
+                  Save API Key
+                </button>
+
+                <button
+                    className="btn"
+                    style={{ marginTop: '1rem' }}
+                    onClick={closePlanModal}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+        )}
       </>
   );
 };
 
-/*
- * Build a nested tree structure out of the flat array from GitHub’s “trees” API
- */
+/* Build a nested tree structure out of the flat array from GitHub’s “trees” API */
 function buildNestedTree(treeItems: TreeItem[]): (FolderNode | FileNode)[] {
   const rootNodes: (FolderNode | FileNode)[] = [];
-
   for (const item of treeItems) {
     const parts = item.path.split('/');
     insertPath(rootNodes, parts, item);
@@ -456,9 +623,7 @@ function buildNestedTree(treeItems: TreeItem[]): (FolderNode | FileNode)[] {
   return rootNodes;
 }
 
-/*
- * Recursive insertion function
- */
+/* Recursive insertion function */
 function insertPath(
     currentLevel: (FolderNode | FileNode)[],
     parts: string[],
@@ -466,10 +631,8 @@ function insertPath(
 ) {
   const [first, ...rest] = parts;
 
-  // If no more parts left, this is the final node
   if (rest.length === 0) {
     if (item.type === 'blob') {
-      // It's a file
       currentLevel.push({
         name: first,
         type: 'file',
@@ -477,7 +640,6 @@ function insertPath(
         sha: item.sha,
       });
     } else {
-      // It's a folder but has no children? (Rare case)
       currentLevel.push({
         name: first,
         type: 'folder',
@@ -489,12 +651,10 @@ function insertPath(
     return;
   }
 
-  // We still have sub-parts, so it must be inside a folder
   let folderNode = currentLevel.find(
       node => node.type === 'folder' && node.name === first
   ) as FolderNode | undefined;
 
-  // If the folder doesn’t exist yet, create it
   if (!folderNode) {
     folderNode = {
       name: first,
@@ -505,16 +665,11 @@ function insertPath(
     };
     currentLevel.push(folderNode);
   }
-
-  // Recurse deeper
   insertPath(folderNode.children, rest, item);
 }
 
-/*
- * A simple component to display the file/folder tree
- */
+/* A simple component to display the file/folder tree */
 function FileTree({ nodes }: { nodes: (FolderNode | FileNode)[] }) {
-  // Sort folders above files
   nodes.sort((a, b) => {
     if (a.type === 'folder' && b.type === 'file') return -1;
     if (a.type === 'file' && b.type === 'folder') return 1;
@@ -530,13 +685,10 @@ function FileTree({ nodes }: { nodes: (FolderNode | FileNode)[] }) {
   );
 }
 
-/*
- * Render each file/folder node
- */
+/* Render each file/folder node */
 function FileNodeUI({ node }: { node: FolderNode | FileNode }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  // You can get fancy with file icons
   const getFileIcon = (fileName: string) => {
     const extension = fileName.split('.').pop()?.toLowerCase();
     if (extension === 'md') return <FiFileText />;
@@ -558,7 +710,6 @@ function FileNodeUI({ node }: { node: FolderNode | FileNode }) {
         </li>
     );
   } else {
-    // folder
     const toggleOpen = () => setIsOpen(!isOpen);
     return (
         <li className="folder-item">
