@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - echo_net
 
   backend:
     build:
@@ -27,17 +29,19 @@ services:
         condition: service_healthy
     ports:
       - "5001:5001"
+    env_file:
+      - constants.env   # Loads the environment from your .env file
     environment:
       DB_HOST: db
       DB_USER: postgres
       DB_PASS: postgres
       DB_NAME: echodb
       DB_PORT: 5432
-      JWT_SECRET: "supersecretkey123"
-      GITHUB_CLIENT_ID: "Ov23liyHTxCSxmH4xKLg"
-      GITHUB_CLIENT_SECRET: "b6d646bfdd047d15bd89521aaaccc90a06b03a42"
-      FRONTEND_URL: "http://localhost:5173/link-github"
-      PORT: 5001
+      # If GitHub Actions sets OPENAI_API_KEY,
+      # it can override the local .env by echoing "OPENAI_API_KEY=..." into .env
+      # before docker-compose build
+    networks:
+      - echo_net
 
   frontend:
     build:
@@ -53,8 +57,9 @@ services:
     volumes:
       - ./fe:/app
       - /app/node_modules
+    networks:
+      - echo_net
 
 networks:
-  default:
-    name: echo_net
+  echo_net:
     driver: bridge

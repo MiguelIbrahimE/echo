@@ -239,3 +239,35 @@ html.dark-mode .btn:hover {
 .profile-dropdown-item:hover {
     background-color: #eee;
 }
+/* Editor top-level container in the right pane.
+   We’ll call it .editor-split.
+   This is the side-by-side layout. */
+.editor-split {
+    display: flex;
+    flex: 1;           /* let it fill all vertical space */
+    gap: 1rem;         /* spacing between text area & preview */
+    margin-bottom: 1rem;
+}
+
+/* Make the textarea take half of the width,
+   the preview takes the other half. Adjust as you prefer. */
+.doc-textarea {
+    flex: 1; /* or 0.5 if you prefer exact ratio */
+    font-size: 16px;
+    resize: none;
+    border: 1px solid #656565;
+    padding: 0.5rem;
+    outline: none;
+    height: 100%;
+}
+
+/* The preview gets the other half of the space.
+   We can style it similarly. */
+.doc-preview {
+    flex: 1;
+    border: 1px solid #737272;
+    background-color: inherit;
+    padding: 0.5rem;
+    white-space: pre-wrap;
+    overflow: auto;  /* if the content is long, allow scrolling */
+}

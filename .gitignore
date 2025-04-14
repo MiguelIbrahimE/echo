@@ -3,7 +3,7 @@ env
 echography.pem
 .pem
 *.env
-.env
+constants.env
 .venv
 bin
 include
