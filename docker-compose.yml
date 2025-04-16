@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - echo_net
 
   backend:
     build:
@@ -27,17 +29,27 @@ services:
         condition: service_healthy
     ports:
       - "5001:5001"
+
+    # ✅ ADD THIS LINE TO IMPORT FROM .env
+    env_file:
+      - .env
+
     environment:
       DB_HOST: db
       DB_USER: postgres
       DB_PASS: postgres
       DB_NAME: echodb
       DB_PORT: 5432
-      JWT_SECRET: "supersecretkey123"
-      GITHUB_CLIENT_ID: "Ov23liyHTxCSxmH4xKLg"
-      GITHUB_CLIENT_SECRET: "b6d646bfdd047d15bd89521aaaccc90a06b03a42"
-      FRONTEND_URL: "http://localhost:5173/link-github"
-      PORT: 5001
+      # These will be overridden if defined in .env:
+      GPT_API_KEY: ${GPT_API_KEY}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      PORT: ${PORT}
+
+    networks:
+      - echo_net
 
   frontend:
     build:
@@ -53,9 +65,9 @@ services:
     volumes:
       - ./fe:/app
       - /app/node_modules
-
+    networks:
+      - echo_net
 
 networks:
-  default:
-    name: echo_net
+  echo_net:
     driver: bridge

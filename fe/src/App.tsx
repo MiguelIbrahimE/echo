@@ -311,16 +311,11 @@ function App() {
                         </div>
                         <div
                             className="nav-item"
-                            onClick={() => handleMenuItemClick('/documents')}
+                            onClick={() => handleMenuItemClick('/document-page')}
                         >
                             My Documents
                         </div>
-                        <div
-                            className="nav-item"
-                            onClick={() => handleMenuItemClick('/settings')}
-                        >
-                            Settings
-                        </div>
+
                         <div
                             className="nav-item"
                             onClick={() => handleMenuItemClick('/faq')}
