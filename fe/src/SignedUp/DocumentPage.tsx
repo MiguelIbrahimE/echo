@@ -1,10 +1,15 @@
 /* ==========================================
    DocumentPage.tsx
-   With extra wait & retry for the newest README
-   ========================================== */
+   Always shows side-by-side Markdown preview
+   With short wait & retry for newest README
+========================================== */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
+
+// 1) Import react-markdown + gfm
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import "../global-css/navbar.css";
 import "./CSS/DocPage.css";
@@ -84,18 +89,17 @@ const DocumentPage: React.FC = () => {
   const [treeItems, setTreeItems] = useState<TreeItem[]>([]);
   const [nestedTree, setNestedTree] = useState<(FolderNode | FileNode)[]>([]);
 
-  // Editor
+  // Editor states
   const [docContent, setDocContent] = useState<string>('');
   const [isAutosaved, setIsAutosaved] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Progress modal
+  // “Generate Manual” modal states
   const [isGenerating, setIsGenerating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
 
-  // Dark mode & preview mode
+  // Dark mode
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isPreview, setIsPreview] = useState(false);
 
   // ============================================
   // On mount -> parse data & load
@@ -124,7 +128,7 @@ const DocumentPage: React.FC = () => {
     setRepoFullName(repo);
     setToken(ghToken);
 
-    // (4) If we have GH token + repo, fetch branches
+    // (4) If GH token + repo -> fetch branches
     if (repo && ghToken) {
       fetchBranches(repo, ghToken);
     } else {
@@ -151,11 +155,6 @@ const DocumentPage: React.FC = () => {
       Cookies.set('darkMode', 'true');
     }
     setIsDarkMode(!isDarkMode);
-  };
-
-  // Toggle editor vs. preview
-  const handlePreviewToggle = () => {
-    setIsPreview(!isPreview);
   };
 
   // ============================================
@@ -241,9 +240,50 @@ const DocumentPage: React.FC = () => {
     }, 1000);
   };
 
-  // ============================================
+  // --------------------------------------------
+  // If you want code syntax highlighting, you can do more with react-syntax-highlighter or rehype-plugins
+  // but let's keep it simple with just GFM
+  // --------------------------------------------
+
+  // A little sleep helper
+  async function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Attempt re-fetch of README from the new commit
+  async function fetchReadmeWithRetry(
+      owner: string,
+      repoName: string,
+      commitSha: string,
+      attempts = 3
+  ): Promise<string | null> {
+    const readmeUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/README.md?ref=${commitSha}`;
+
+    for (let i = 1; i <= attempts; i++) {
+      console.log(`[fetchReadmeWithRetry] Attempt #${i} for commit=${commitSha}`);
+      const resp = await fetch(readmeUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!resp.ok) {
+        console.warn(`[fetchReadmeWithRetry] Attempt #${i} => status=${resp.status}`);
+        await sleep(1000);
+        continue;
+      }
+
+      const jsonData = await resp.json();
+      if (jsonData.content) {
+        return atob(jsonData.content);
+      }
+
+      console.warn(`[fetchReadmeWithRetry] Attempt #${i} => no "content" field returned.`);
+      await sleep(1000);
+    }
+
+    return null;
+  }
+
   // getFileSha
-  // ============================================
   const getFileSha = useCallback(
       async (path: string) => {
         if (!repoFullName || !token || !selectedBranch) {
@@ -268,54 +308,7 @@ const DocumentPage: React.FC = () => {
       [repoFullName, token, selectedBranch]
   );
 
-  /**
-   * Sleep helper to wait a bit (in ms)
-   */
-  async function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Try fetching README from a given commit SHA, up to 3 times
-   */
-  async function fetchReadmeWithRetry(
-      owner: string,
-      repoName: string,
-      commitSha: string,
-      attempts = 3
-  ): Promise<string | null> {
-    const readmeUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/README.md?ref=${commitSha}`;
-
-    for (let i = 1; i <= attempts; i++) {
-      console.log(`[fetchReadmeWithRetry] Attempt #${i} for commit=${commitSha}`);
-
-      const resp = await fetch(readmeUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!resp.ok) {
-        console.warn(`[fetchReadmeWithRetry] Attempt #${i} => status=${resp.status}`);
-        // Wait 1 second before trying again
-        await sleep(1000);
-        continue;
-      }
-
-      const jsonData = await resp.json();
-      if (jsonData.content) {
-        return atob(jsonData.content);
-      }
-
-      console.warn(`[fetchReadmeWithRetry] Attempt #${i} => no "content" field returned.`);
-      await sleep(1000);
-    }
-
-    return null;
-  }
-
-  // ============================================
-  // handleCommitToGithub -> do PUT, parse new commit SHA
-  // then fetch newest README with short wait
-  // ============================================
+  // handleCommitToGithub -> do PUT, then fetch updated README
   const handleCommitToGithub = useCallback(async () => {
     if (!repoFullName || !token || !selectedBranch) {
       console.warn('[handleCommitToGithub] Missing data:', { repoFullName, token, selectedBranch });
@@ -347,26 +340,25 @@ const DocumentPage: React.FC = () => {
         throw new Error(`GitHub commit failed: ${msg}`);
       }
 
-      // Parse new commit data
       const putJson = await putResp.json();
       const newCommitSha = putJson.commit?.sha;
       console.log('[handleCommitToGithub] New commit SHA:', newCommitSha);
 
       if (!newCommitSha) {
-        alert('Committed, but could not find the new commit SHA. Something is off.');
+        alert('Committed, but could not find new commit SHA. Something is off.');
         return;
       }
 
-      // (1) Refresh file tree using the new commit SHA
+      // 1) Refresh file tree with new commit
       await fetchFileTree(repoFullName, token, newCommitSha);
 
-      // (2) Attempt up to 3 times to fetch the updated README from the new commit
+      // 2) Attempt to fetch new README with small wait
       const newReadme = await fetchReadmeWithRetry(owner, repoName, newCommitSha, 3);
       if (newReadme) {
         setDocContent(newReadme);
-        alert('Committed README.md successfully, and loaded the newest version!');
+        alert('Committed README.md successfully, and loaded newest version!');
       } else {
-        alert('Committed successfully, but we could not fetch the updated content after 3 tries.');
+        alert('Committed successfully, but could not fetch updated content after 3 tries.');
       }
     } catch (err) {
       console.error('[handleCommitToGithub] Error:', err);
@@ -380,9 +372,7 @@ const DocumentPage: React.FC = () => {
     getFileSha
   ]);
 
-  // ============================================
   // Generate user manual
-  // ============================================
   const handleGenerateUserManual = async () => {
     if (!repoFullName || !token || !selectedBranch) {
       console.warn('[handleGenerateUserManual] Missing info:', { repoFullName, token, selectedBranch });
@@ -422,12 +412,10 @@ const DocumentPage: React.FC = () => {
     }
   };
 
-  // Close modal
   const handleCloseModal = () => {
     setIsGenerating(false);
   };
 
-  // Go back
   const goBack = () => navigate(-1);
 
   // ============================================
@@ -450,7 +438,7 @@ const DocumentPage: React.FC = () => {
         <div className="doc-container">
           <ProgressModal isVisible={isGenerating} isComplete={isComplete} onClose={handleCloseModal} />
 
-          {/* LEFT PANE */}
+          {/* LEFT PANE: Tree */}
           <div className="doc-left-pane">
             <h3>Repository Tree</h3>
             <div className="branch-selector">
@@ -468,19 +456,26 @@ const DocumentPage: React.FC = () => {
             <FileTree nodes={nestedTree} />
           </div>
 
-          {/* RIGHT PANE */}
+          {/* RIGHT PANE: Editor + side-by-side MD preview */}
           <div className="doc-right-pane">
             <h2>Documentation Editor</h2>
-            {!isPreview ? (
-                <textarea
-                    className="doc-textarea"
-                    placeholder="Type your doc here..."
-                    value={docContent}
-                    onChange={handleDocChange}
-                />
-            ) : (
-                <div className="doc-preview">{docContent}</div>
-            )}
+
+            {/* editor-split container */}
+            <div className="editor-split">
+            <textarea
+                className="doc-textarea"
+                placeholder="Type Markdown here..."
+                value={docContent}
+                onChange={handleDocChange}
+            />
+
+              {/* 2) Here's our Markdown preview using `react-markdown` & `remark-gfm` */}
+              <div className="doc-preview">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {docContent}
+                </ReactMarkdown>
+              </div>
+            </div>
 
             <div className="editor-footer">
               <button className="btn" onClick={goBack}>Back</button>
@@ -489,9 +484,6 @@ const DocumentPage: React.FC = () => {
               ) : (
                   <span className="autosave-status typing">Typing...</span>
               )}
-              <button className="btn preview-btn" onClick={handlePreviewToggle}>
-                {isPreview ? 'Edit Mode' : 'Preview'}
-              </button>
               <button className="btn commit-btn" onClick={handleCommitToGithub}>
                 Commit
               </button>
@@ -506,7 +498,7 @@ const DocumentPage: React.FC = () => {
 };
 
 /* =========================================================
-   Build a nested tree structure from GitHub’s `tree` API
+   buildNestedTree, same as before
 ========================================================= */
 function buildNestedTree(treeItems: TreeItem[]): (FolderNode | FileNode)[] {
   const rootNodes: (FolderNode | FileNode)[] = [];
@@ -558,7 +550,6 @@ function insertPath(
     };
     currentLevel.push(folderNode);
   }
-
   insertPath(folderNode.children, rest, item);
 }
 
