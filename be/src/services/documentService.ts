@@ -5,12 +5,7 @@
 import axios, { AxiosError } from 'axios';
 import { encode } from 'gpt-tokenizer';
 
-// Instead of dotenv here, we rely on server.ts calling dotenv.config() early
-// But you *could* also do:
-// import dotenv from 'dotenv';
-// dotenv.config();
-
-// [ADDED] Debug log to confirm environment variable
+// [DEBUG] Confirm GPT key is present
 console.log('>>> [documentService.ts] Checking GPT_API_KEY:', process.env.GPT_API_KEY
     ? `Loaded, length=${process.env.GPT_API_KEY.length}`
     : 'Undefined!'
@@ -38,10 +33,8 @@ interface GitTreeResponse {
 }
 
 const MAX_TOKENS_PER_CHUNK = 3000;
+const MAX_FILE_SIZE = 100_000; // ~100 KB
 
-/**
- * Summarize an entire repository branch
- */
 export async function analyzeRepository(
     repoFullName: string,
     githubToken: string,
@@ -57,20 +50,16 @@ export async function analyzeRepository(
   const treeUrl = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${selectedBranch}?recursive=1`;
   console.log('[analyzeRepository] Fetching tree from =>', treeUrl);
 
-  // 1) Fetch file tree
   const treeResp = await axios.get<GitTreeResponse>(treeUrl, {
     headers: { Authorization: `Bearer ${githubToken}` },
   });
-  console.log('[analyzeRepository] Status from GitHub tree:', treeResp.status, treeResp.statusText);
+  console.log('[analyzeRepository] GitHub tree response:', treeResp.status, treeResp.statusText);
 
   const data = treeResp.data;
-  console.log('[analyzeRepository] Found total files:', data.tree.length);
+  const files = data.tree.filter(item => item.type === 'blob');
+  console.log('[analyzeRepository] Blob files found:', files.length);
 
-  const files = data.tree.filter((item) => item.type === 'blob');
-  console.log('[analyzeRepository] Filtered blob files only. Count:', files.length);
-
-  // 2) For each file, fetch contents
-  console.log('[analyzeRepository] Fetching content for each file...');
+  // 1) Fetch file contents
   const fileContents = await Promise.all(
       files.map(async (file) => {
         const fileUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/${file.path}?ref=${selectedBranch}`;
@@ -79,51 +68,56 @@ export async function analyzeRepository(
             headers: { Authorization: `Bearer ${githubToken}` },
           });
           const fileData = fileResp.data;
+          const decoded = Buffer.from(fileData.content, 'base64').toString('utf-8');
           return {
             path: file.path,
-            content: Buffer.from(fileData.content, 'base64').toString('utf-8'),
+            size: fileData.size || 0,
+            content: decoded,
           };
-        } catch (err: unknown) {
-          if (axios.isAxiosError(err)) {
-            console.error(
-                '[analyzeRepository] Axios error fetching file:', file.path,
-                'status:', err.response?.status,
-                'data:', err.response?.data
-            );
-          } else if (err instanceof Error) {
-            console.error('[analyzeRepository] Generic error fetching file:', file.path, err.message);
-          } else {
-            console.error('[analyzeRepository] Unknown error fetching file:', file.path, err);
-          }
+        } catch (err) {
+          console.error(`[ERROR] Skipping file ${file.path}:`, err instanceof Error ? err.message : err);
           return {
             path: file.path,
+            size: 0,
             content: '',
           };
         }
       })
   );
 
-  // 3) Filter out unimportant or large files
+  // 2) Filter out large/unimportant files
   const skipPatterns = [
-    /node_modules/, /\.git/, /venv/, /\.dockerfile/i, /\.gitignore/i,
-    /package(-lock)?\.json/i, /\.env/i, /dist/i, /.*\.md$/i
+    /node_modules/i,
+    /\.git/i,
+    /venv/i,
+    /\.dockerfile$/i,
+    /\.gitignore$/i,
+    /package(-lock)?\.json$/i,
+    /\.env$/i,
+    /dist/i,
+    /\.(png|jpe?g|gif|svg|ico|bmp|webp)$/i,
+    /\.md$/i
   ];
+
   const filteredFiles = fileContents.filter(f => {
-    if (!f.content) return false;
-    const skip = skipPatterns.some(p => p.test(f.path));
-    return !skip;
+    if (!f.content || f.size > MAX_FILE_SIZE) return false;
+    const shouldSkip = skipPatterns.some(p => p.test(f.path));
+    if (shouldSkip) {
+      console.log(`[SKIP] Ignored file: ${f.path}`);
+    }
+    return !shouldSkip;
   });
-  console.log('[analyzeRepository] Filtered out "unimportant" patterns. Remaining:', filteredFiles.length);
 
-  // 4) Summarize each file in chunks
+  console.log(`[FILTERED] Remaining files for summarization: ${filteredFiles.length}`);
+
+  // 3) Summarize each file in chunks
   const allSummaries: string[] = [];
-
   for (const file of filteredFiles) {
-    console.log(`\n[analyzeRepository] Summarizing file: ${file.path}`);
+    console.log(`\n[SUMMARIZE] File: ${file.path}`);
     const tokens = encode(file.content);
-    console.log(`[analyzeRepository] Token count for ${file.path}:`, tokens.length);
-    const totalChunks = Math.ceil(tokens.length / MAX_TOKENS_PER_CHUNK);
+    console.log(`[TOKEN COUNT] ${file.path}: ${tokens.length}`);
 
+    const totalChunks = Math.ceil(tokens.length / MAX_TOKENS_PER_CHUNK);
     const fileSummaries: string[] = [];
 
     for (let i = 0; i < totalChunks; i++) {
@@ -132,32 +126,13 @@ export async function analyzeRepository(
           (i + 1) * MAX_TOKENS_PER_CHUNK
       );
       const chunkText = decode(chunk);
-      console.log(
-          `[analyzeRepository] Summarizing chunk ${i + 1}/${totalChunks} for ${file.path}. chunk length=`,
-          chunk.length
-      );
+      console.log(`[CHUNK] ${file.path} [${i + 1}/${totalChunks}]`);
 
       try {
         const summary = await getSummaryFromOpenAI(chunkText, file.path, i + 1);
         fileSummaries.push(summary);
-      } catch (err: unknown) {
-        if (axios.isAxiosError(err)) {
-          console.error(
-              `[analyzeRepository] getSummaryFromOpenAI Axios error chunk ${i + 1} of ${file.path}`,
-              'status:', err.response?.status,
-              'data:', err.response?.data
-          );
-        } else if (err instanceof Error) {
-          console.error(
-              `[analyzeRepository] getSummaryFromOpenAI Generic error chunk ${i + 1} of ${file.path}`,
-              err.message
-          );
-        } else {
-          console.error(
-              `[analyzeRepository] getSummaryFromOpenAI Unknown error chunk ${i + 1} of ${file.path}`,
-              err
-          );
-        }
+      } catch (err) {
+        console.error(`[ERROR] Summarizing chunk ${i + 1} of ${file.path}:`, err);
         fileSummaries.push(`(Error summarizing chunk ${i + 1})`);
       }
     }
@@ -165,38 +140,36 @@ export async function analyzeRepository(
     allSummaries.push(...fileSummaries);
   }
 
-  // 5) Merge chunk-level summaries
-  console.log('[analyzeRepository] Merging all summaries. Summaries count=', allSummaries.length);
+  console.log(`[MERGE] Total summaries collected: ${allSummaries.length}`);
 
+  // 4) Construct final “user manual” prompt with expanded instructions
   const finalPrompt = `
-You are an expert software documentation writer.
+You are a senior software engineer, fully immersed in this codebase. 
+Your goal is to produce a thorough, professional user manual that covers:
+• The overall architecture and how the components fit together
+• The primary purpose and value proposition of the project
+• Step-by-step instructions on how to set up, install, or run the app
+• Relevant configuration or environment variables and how they are used
+• Best practices for contributing or extending functionality
+• Any known limitations or pitfalls that developers should watch for
 
-Based on the following extracted code summaries, write a final clean, structured user manual that explains the architecture, purpose, and how developers can use and contribute to the project:
+Below are the code summaries from multiple files in this repo. 
+Using these details, craft a cohesive, structured manual that helps new developers quickly understand the project and how to contribute effectively.
 
 ${allSummaries.map((s, i) => `Summary ${i + 1}:\n${s}`).join('\n\n')}
+
+If any details are unclear, infer them based on best practices for Node.js/TypeScript apps. 
+Make sure your final write-up is well-organized, with clear sections, bullet points, and headings.
   `;
-  console.log('[analyzeRepository] Sending final prompt to OpenAI. Prompt length=', finalPrompt.length);
 
   const manualResponse = await callOpenAI(finalPrompt);
-  console.log('[analyzeRepository] Received final user manual from OpenAI. length=', manualResponse.length);
+  console.log('[OPENAI] User manual generated, length:', manualResponse.length);
 
   return { userManual: manualResponse };
 }
 
-/** Summarize a single chunk via OpenAI */
-async function getSummaryFromOpenAI(
-    chunkText: string,
-    filePath: string,
-    chunkNum: number
-): Promise<string> {
-  console.log(
-      '[getSummaryFromOpenAI] Summarizing chunk for',
-      filePath,
-      'chunkNum=',
-      chunkNum,
-      'OpenAI Key Present=',
-      !!OPENAI_API_KEY
-  );
+async function getSummaryFromOpenAI(chunkText: string, filePath: string, chunkNum: number): Promise<string> {
+  console.log(`[OPENAI] Requesting summary for: ${filePath}, chunk ${chunkNum}`);
 
   const messages = [
     {
@@ -209,75 +182,50 @@ async function getSummaryFromOpenAI(
     },
   ];
 
-  try {
-    const res = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-3.5-turbo',
-          messages,
-          temperature: 0.2,
-          max_tokens: 512,
+  const res = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages,
+        temperature: 0.2,
+        max_tokens: 512,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-    );
-    return res.data.choices[0].message.content.trim();
-  } catch (error: unknown) {
-    if (axios.isAxiosError(error)) {
-      console.error('[getSummaryFromOpenAI] Axios error from OpenAI:', error.response?.data);
-    } else if (error instanceof Error) {
-      console.error('[getSummaryFromOpenAI] Generic error from OpenAI:', error.message);
-    } else {
-      console.error('[getSummaryFromOpenAI] Unknown error from OpenAI:', error);
-    }
-    throw error;
-  }
+      }
+  );
+
+  return res.data.choices[0].message.content.trim();
 }
 
-/** Final call to OpenAI to merge everything into a single user manual */
 async function callOpenAI(prompt: string): Promise<string> {
-  console.log('[callOpenAI] Merging final summary. Key present?', !!OPENAI_API_KEY);
-
   const messages = [
     { role: 'system', content: 'You are a professional documentation writer.' },
     { role: 'user', content: prompt },
   ];
 
-  try {
-    const res = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: 'gpt-3.5-turbo',
-          messages,
-          temperature: 0.4,
-          max_tokens: 1500,
+  const res = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages,
+        temperature: 0.4,
+        max_tokens: 1500,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-    );
-    return res.data.choices[0].message.content.trim();
-  } catch (error: unknown) {
-    if (axios.isAxiosError(error)) {
-      console.error('[callOpenAI] Axios error from OpenAI final merge:', error.response?.data);
-    } else if (error instanceof Error) {
-      console.error('[callOpenAI] Generic error from OpenAI final merge:', error.message);
-    } else {
-      console.error('[callOpenAI] Unknown error from OpenAI final merge:', error);
-    }
-    throw error;
-  }
+      }
+  );
+
+  return res.data.choices[0].message.content.trim();
 }
 
-/** Decode GPT tokens */
 function decode(tokens: number[]): string {
-  const text = new TextDecoder().decode(Uint8Array.from(tokens));
-  return text;
+  return new TextDecoder().decode(Uint8Array.from(tokens));
 }
