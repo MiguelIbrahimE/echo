@@ -29,19 +29,16 @@ services:
         condition: service_healthy
     ports:
       - "5001:5001"
-    env_file:
-      - constants.env   # Loads the environment from your .env file
     environment:
       DB_HOST: db
       DB_USER: postgres
       DB_PASS: postgres
       DB_NAME: echodb
       DB_PORT: 5432
-      # If GitHub Actions sets OPENAI_API_KEY,
-      # it can override the local .env by echoing "OPENAI_API_KEY=..." into .env
-      # before docker-compose build
+      GPT_API_KEY: ${GPT_API_KEY}  # <--- 🟢 Inject it from host env
     networks:
       - echo_net
+
 
   frontend:
     build:

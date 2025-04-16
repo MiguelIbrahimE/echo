@@ -1,14 +1,24 @@
 /* =====================================================
-   analyzeRepository.ts
-   With safe type-narrowing for errors
+   documentService.ts
+   (analyzes the repo and calls OpenAI)
 ===================================================== */
 import axios, { AxiosError } from 'axios';
 import { encode } from 'gpt-tokenizer';
 
-// Instead of dotenv, rely on environment variables from GitHub runtime:
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY; // read from GitHub
+// Instead of dotenv here, we rely on server.ts calling dotenv.config() early
+// But you *could* also do:
+// import dotenv from 'dotenv';
+// dotenv.config();
+
+// [ADDED] Debug log to confirm environment variable
+console.log('>>> [documentService.ts] Checking GPT_API_KEY:', process.env.GPT_API_KEY
+    ? `Loaded, length=${process.env.GPT_API_KEY.length}`
+    : 'Undefined!'
+);
+
+const OPENAI_API_KEY = process.env.GPT_API_KEY;
 if (!OPENAI_API_KEY) {
-  console.warn('Warning: OPENAI_API_KEY is undefined. Make sure it is set in GitHub Variables or your environment');
+  console.warn('Warning: OPENAI_API_KEY is undefined. Make sure it is set in GitHub/ENV');
 }
 
 interface TreeItem {
@@ -56,7 +66,7 @@ export async function analyzeRepository(
   const data = treeResp.data;
   console.log('[analyzeRepository] Found total files:', data.tree.length);
 
-  const files = data.tree.filter(item => item.type === 'blob');
+  const files = data.tree.filter((item) => item.type === 'blob');
   console.log('[analyzeRepository] Filtered blob files only. Count:', files.length);
 
   // 2) For each file, fetch contents
@@ -138,10 +148,15 @@ export async function analyzeRepository(
               'data:', err.response?.data
           );
         } else if (err instanceof Error) {
-          console.error(`[analyzeRepository] getSummaryFromOpenAI Generic error chunk ${i + 1} of ${file.path}`,
-              err.message);
+          console.error(
+              `[analyzeRepository] getSummaryFromOpenAI Generic error chunk ${i + 1} of ${file.path}`,
+              err.message
+          );
         } else {
-          console.error(`[analyzeRepository] getSummaryFromOpenAI Unknown error chunk ${i + 1} of ${file.path}`, err);
+          console.error(
+              `[analyzeRepository] getSummaryFromOpenAI Unknown error chunk ${i + 1} of ${file.path}`,
+              err
+          );
         }
         fileSummaries.push(`(Error summarizing chunk ${i + 1})`);
       }
