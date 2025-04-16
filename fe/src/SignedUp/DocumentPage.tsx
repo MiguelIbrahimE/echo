@@ -1,6 +1,6 @@
 /* ==========================================
    DocumentPage.tsx
-   With extra debug logging
+   With extra wait & retry for the newest README
    ========================================== */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -73,44 +73,42 @@ const DocumentPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 1) If a user is logged in locally, we store that in localStorage as 'myAppToken'
+  // Logged in user (from local JWT)
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
 
-  // 2) GitHub-related state
-  const [token, setToken] = useState('');             // GitHub token
+  // GitHub-related states
+  const [token, setToken] = useState('');
   const [repoFullName, setRepoFullName] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
   const [treeItems, setTreeItems] = useState<TreeItem[]>([]);
   const [nestedTree, setNestedTree] = useState<(FolderNode | FileNode)[]>([]);
 
-  // 3) Editor content
+  // Editor
   const [docContent, setDocContent] = useState<string>('');
   const [isAutosaved, setIsAutosaved] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 4) Progress modal states
+  // Progress modal
   const [isGenerating, setIsGenerating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
 
-  // 5) Dark mode
+  // Dark mode & preview mode
   const [isDarkMode, setIsDarkMode] = useState(false);
-
-  // 6) Preview mode
   const [isPreview, setIsPreview] = useState(false);
 
   // ============================================
-  // useEffect: parse data from URL, load branches, etc.
+  // On mount -> parse data & load
   // ============================================
   useEffect(() => {
-    // 1) Check for dark-mode cookie
+    // (1) Dark mode
     const darkCookie = Cookies.get('darkMode');
     if (darkCookie === 'true') {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark-mode');
     }
 
-    // 2) See if there's a local JWT in localStorage
+    // (2) Check local JWT
     const storedToken = localStorage.getItem('myAppToken');
     if (storedToken) {
       const decoded = parseJwt(storedToken);
@@ -119,22 +117,21 @@ const DocumentPage: React.FC = () => {
       }
     }
 
-    // 3) Get ?repo= & ?token= from the URL query
+    // (3) Get ?repo= & ?token= from URL
     const params = new URLSearchParams(location.search);
     const repo = params.get('repo') || '';
     const ghToken = params.get('token') || '';
     setRepoFullName(repo);
     setToken(ghToken);
 
-    // 4) If we have a GitHub token + repo, fetch branches
+    // (4) If we have GH token + repo, fetch branches
     if (repo && ghToken) {
-      console.log('[DocumentPage] Found repo:', repo, 'and GH token:', ghToken);
       fetchBranches(repo, ghToken);
     } else {
-      console.log('[DocumentPage] No repo or token in URL. repo=', repo, ' token=', ghToken);
+      console.log('[DocumentPage] No repo or token in URL.', { repo, ghToken });
     }
 
-    // 5) If there's saved doc content, load it
+    // (5) Load doc content from localStorage
     const savedDoc = localStorage.getItem('docContent');
     if (savedDoc) {
       setDocContent(savedDoc);
@@ -142,7 +139,7 @@ const DocumentPage: React.FC = () => {
   }, [location.search]);
 
   // ============================================
-  // Toggle dark/light
+  // Toggle dark mode
   // ============================================
   const toggleDarkMode = () => {
     const html = document.documentElement;
@@ -156,18 +153,15 @@ const DocumentPage: React.FC = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  // ============================================
-  // Toggle Editor/Preview
-  // ============================================
+  // Toggle editor vs. preview
   const handlePreviewToggle = () => {
     setIsPreview(!isPreview);
   };
 
   // ============================================
-  // Fetch branches from GitHub
+  // Fetch branches
   // ============================================
   async function fetchBranches(repo: string, accessToken: string) {
-    console.log('[fetchBranches] Requesting branches for', repo, 'with GH token:', accessToken);
     try {
       const [owner, repoName] = repo.split('/');
       const url = `https://api.github.com/repos/${owner}/${repoName}/branches`;
@@ -175,17 +169,15 @@ const DocumentPage: React.FC = () => {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) {
-        throw new Error(`[fetchBranches] Could not fetch branches: ${resp.status} ${resp.statusText}`);
+        throw new Error(`[fetchBranches] Error: ${resp.status} ${resp.statusText}`);
       }
       const data: Branch[] = await resp.json();
-      console.log('[fetchBranches] Received branches:', data);
       setBranches(data);
 
-      // Default to "main" if it exists, else use the first branch
       if (data.length > 0) {
         const mainBranch = data.find(b => b.name === 'main') || data[0];
         setSelectedBranch(mainBranch.name);
-        fetchFileTree(repo, accessToken, mainBranch.commit.sha);
+        await fetchFileTree(repo, accessToken, mainBranch.commit.sha);
       }
     } catch (err) {
       console.error('[fetchBranches] Error:', err);
@@ -193,10 +185,9 @@ const DocumentPage: React.FC = () => {
   }
 
   // ============================================
-  // Fetch entire file tree from GitHub
+  // Fetch file tree
   // ============================================
   async function fetchFileTree(repo: string, accessToken: string, commitSha: string) {
-    console.log('[fetchFileTree] For repo:', repo, 'commitSha:', commitSha);
     try {
       const [owner, repoName] = repo.split('/');
       const url = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${commitSha}?recursive=1`;
@@ -204,44 +195,37 @@ const DocumentPage: React.FC = () => {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!resp.ok) {
-        throw new Error(`[fetchFileTree] Could not fetch file tree: ${resp.status} ${resp.statusText}`);
+        throw new Error(`[fetchFileTree] Error: ${resp.status} ${resp.statusText}`);
       }
       const data: GitTreeResponse = await resp.json();
-      console.log('[fetchFileTree] Received tree items. Count:', data.tree.length);
       setTreeItems(data.tree);
     } catch (err) {
       console.error('[fetchFileTree] Error:', err);
     }
   }
 
-  // ============================================
-  // Build nested tree from the flat array
-  // ============================================
+  // Build nested structure after we get treeItems
   useEffect(() => {
     if (treeItems.length === 0) {
       setNestedTree([]);
       return;
     }
-    console.log('[DocumentPage] Building nested tree for', treeItems.length, 'items.');
     const root = buildNestedTree(treeItems);
     setNestedTree(root);
   }, [treeItems]);
 
-  // ============================================
-  // Branch select change
-  // ============================================
-  const handleBranchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  // On branch change
+  const handleBranchChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newBranch = e.target.value;
     setSelectedBranch(newBranch);
     const branchObj = branches.find(b => b.name === newBranch);
     if (branchObj) {
-      console.log('[handleBranchChange] Switching to branch:', newBranch);
-      fetchFileTree(repoFullName, token, branchObj.commit.sha);
+      await fetchFileTree(repoFullName, token, branchObj.commit.sha);
     }
   };
 
   // ============================================
-  // Editor changes -> auto-save local
+  // Editor changes -> autosave
   // ============================================
   const handleDocChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -254,53 +238,93 @@ const DocumentPage: React.FC = () => {
     typingTimerRef.current = setTimeout(() => {
       localStorage.setItem('docContent', newValue);
       setIsAutosaved(true);
-      console.log('[handleDocChange] Autosaved docContent to localStorage.');
     }, 1000);
   };
 
   // ============================================
-  // Utility: get a file's SHA from GitHub
+  // getFileSha
   // ============================================
   const getFileSha = useCallback(
       async (path: string) => {
         if (!repoFullName || !token || !selectedBranch) {
-          console.warn('[getFileSha] Missing required info. repoFullName:', repoFullName, 'token:', token, 'branch:', selectedBranch);
+          console.warn('[getFileSha] Missing info:', { repoFullName, token, selectedBranch });
           return null;
         }
-        console.log('[getFileSha] Checking SHA for file:', path);
         const [owner, repoName] = repoFullName.split('/');
         const url = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}?ref=${selectedBranch}`;
         try {
-          const resp = await fetch(url, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
           if (!resp.ok) {
-            console.error('[getFileSha] Failed to fetch file SHA. Status:', resp.status, resp.statusText);
+            console.error('[getFileSha] Failed. status=', resp.status);
             return null;
           }
           const data = await resp.json();
-          console.log('[getFileSha] Found SHA for', path, '=>', data.sha);
           return data.sha;
         } catch (err) {
-          console.error('[getFileSha] Error fetching file SHA:', err);
+          console.error('[getFileSha] error:', err);
           return null;
         }
       },
       [repoFullName, token, selectedBranch]
   );
 
+  /**
+   * Sleep helper to wait a bit (in ms)
+   */
+  async function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Try fetching README from a given commit SHA, up to 3 times
+   */
+  async function fetchReadmeWithRetry(
+      owner: string,
+      repoName: string,
+      commitSha: string,
+      attempts = 3
+  ): Promise<string | null> {
+    const readmeUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/README.md?ref=${commitSha}`;
+
+    for (let i = 1; i <= attempts; i++) {
+      console.log(`[fetchReadmeWithRetry] Attempt #${i} for commit=${commitSha}`);
+
+      const resp = await fetch(readmeUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!resp.ok) {
+        console.warn(`[fetchReadmeWithRetry] Attempt #${i} => status=${resp.status}`);
+        // Wait 1 second before trying again
+        await sleep(1000);
+        continue;
+      }
+
+      const jsonData = await resp.json();
+      if (jsonData.content) {
+        return atob(jsonData.content);
+      }
+
+      console.warn(`[fetchReadmeWithRetry] Attempt #${i} => no "content" field returned.`);
+      await sleep(1000);
+    }
+
+    return null;
+  }
+
   // ============================================
-  // Commit docContent to GitHub
+  // handleCommitToGithub -> do PUT, parse new commit SHA
+  // then fetch newest README with short wait
   // ============================================
   const handleCommitToGithub = useCallback(async () => {
     if (!repoFullName || !token || !selectedBranch) {
-      console.warn('[handleCommitToGithub] Missing required data:', { repoFullName, token, selectedBranch });
+      console.warn('[handleCommitToGithub] Missing data:', { repoFullName, token, selectedBranch });
       return;
     }
 
     const path = 'README.md';
-    const sha = await getFileSha(path); // possibly null if no existing README
-    console.log('[handleCommitToGithub] Attempting to commit to', path, 'with existing SHA:', sha);
+    const sha = await getFileSha(path);
+    console.log('[handleCommitToGithub] current README.md sha:', sha);
 
     const base64Content = btoa(docContent || '');
     const message = `Update doc from DocumentPage on branch ${selectedBranch}`;
@@ -308,91 +332,81 @@ const DocumentPage: React.FC = () => {
     try {
       const [owner, repoName] = repoFullName.split('/');
       const url = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}?ref=${selectedBranch}`;
-      console.log('[handleCommitToGithub] PUT =>', url);
-
-      const resp = await fetch(url, {
+      const putResp = await fetch(url, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           Accept: 'application/vnd.github+json',
         },
-        body: JSON.stringify({
-          message,
-          content: base64Content,
-          sha: sha || undefined,
-        }),
+        body: JSON.stringify({ message, content: base64Content, sha: sha || undefined }),
       });
 
-      if (!resp.ok) {
-        const msg = await resp.text();
-        console.error('[handleCommitToGithub] GitHub commit failed:', msg);
+      if (!putResp.ok) {
+        const msg = await putResp.text();
         throw new Error(`GitHub commit failed: ${msg}`);
       }
 
-      alert('Committed to GitHub successfully!');
-      console.log('[handleCommitToGithub] Success. Reloading page in 2s...');
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      // Parse new commit data
+      const putJson = await putResp.json();
+      const newCommitSha = putJson.commit?.sha;
+      console.log('[handleCommitToGithub] New commit SHA:', newCommitSha);
+
+      if (!newCommitSha) {
+        alert('Committed, but could not find the new commit SHA. Something is off.');
+        return;
+      }
+
+      // (1) Refresh file tree using the new commit SHA
+      await fetchFileTree(repoFullName, token, newCommitSha);
+
+      // (2) Attempt up to 3 times to fetch the updated README from the new commit
+      const newReadme = await fetchReadmeWithRetry(owner, repoName, newCommitSha, 3);
+      if (newReadme) {
+        setDocContent(newReadme);
+        alert('Committed README.md successfully, and loaded the newest version!');
+      } else {
+        alert('Committed successfully, but we could not fetch the updated content after 3 tries.');
+      }
     } catch (err) {
       console.error('[handleCommitToGithub] Error:', err);
       alert(`Error committing to GitHub: ${err}`);
     }
-  }, [docContent, repoFullName, selectedBranch, token, getFileSha]);
+  }, [
+    docContent,
+    repoFullName,
+    selectedBranch,
+    token,
+    getFileSha
+  ]);
 
   // ============================================
-  // Go back
-  // ============================================
-  const goBack = () => {
-    navigate(-1);
-  };
-
-  // ============================================
-  // Analyze repo -> calls your Node server
+  // Generate user manual
   // ============================================
   const handleGenerateUserManual = async () => {
     if (!repoFullName || !token || !selectedBranch) {
-      console.warn('[handleGenerateUserManual] Missing info =>', { repoFullName, token, selectedBranch });
+      console.warn('[handleGenerateUserManual] Missing info:', { repoFullName, token, selectedBranch });
       return;
     }
     setIsGenerating(true);
     setIsComplete(false);
 
-    console.log('[handleGenerateUserManual] POSTing to /documents/analyze-repository with:', {
-      repoFullName,
-      token,
-      selectedBranch
-    });
-
     try {
       const response = await fetch('http://localhost:5001/documents/analyze-repository', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // No local JWT needed here
-        },
-        body: JSON.stringify({
-          repoFullName,
-          token,
-          selectedBranch,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repoFullName, token, selectedBranch }),
       });
-
-      console.log('[handleGenerateUserManual] Response status:', response.status, response.statusText);
       if (!response.ok) {
         const errText = await response.text();
-        console.error('[handleGenerateUserManual] Failed to generate user manual. Body:', errText);
-        throw new Error('Failed to generate user manual');
+        throw new Error(`[handleGenerateUserManual] ${errText}`);
       }
 
       const data = await response.json();
-      console.log('[handleGenerateUserManual] user manual generated:', data);
-
       let finalText = '';
       if (typeof data.userManual === 'string') {
         finalText = data.userManual;
-      } else if (data.userManual && typeof data.userManual.userManual === 'string') {
+      } else if (data.userManual?.userManual) {
         finalText = data.userManual.userManual;
       } else {
         finalText = JSON.stringify(data, null, 2);
@@ -401,32 +415,32 @@ const DocumentPage: React.FC = () => {
       setDocContent(finalText);
       setIsComplete(true);
     } catch (err) {
-      console.error('[handleGenerateUserManual] Error generating user manual:', err);
-      alert('Error generating user manual. Check console for details.');
+      console.error('[handleGenerateUserManual] Error:', err);
+      alert('Error generating user manual. See console.');
+    } finally {
       setIsGenerating(false);
     }
   };
 
+  // Close modal
   const handleCloseModal = () => {
     setIsGenerating(false);
   };
 
+  // Go back
+  const goBack = () => navigate(-1);
+
   // ============================================
-  // Render
+  // RENDER
   // ============================================
   return (
       <>
-        {/* NAVBAR */}
         <nav className="navbar">
           <a href="/" className="brand" style={{ textDecoration: 'none', color: 'grey' }}>
             echo
           </a>
           <div className="nav-right">
-            {loggedInUser ? (
-                <p>Signed in as: {loggedInUser}</p>
-            ) : (
-                <p>Not signed in</p>
-            )}
+            {loggedInUser ? <p>Signed in as: {loggedInUser}</p> : <p>Not signed in</p>}
             <button onClick={toggleDarkMode} style={{ marginLeft: '1rem', cursor: 'pointer' }}>
               {isDarkMode ? 'Light Mode' : 'Dark Mode'}
             </button>
@@ -434,14 +448,9 @@ const DocumentPage: React.FC = () => {
         </nav>
 
         <div className="doc-container">
-          {/* ProgressModal for “Generate User Manual” */}
-          <ProgressModal
-              isVisible={isGenerating}
-              isComplete={isComplete}
-              onClose={handleCloseModal}
-          />
+          <ProgressModal isVisible={isGenerating} isComplete={isComplete} onClose={handleCloseModal} />
 
-          {/* LEFT PANE: Repository Tree */}
+          {/* LEFT PANE */}
           <div className="doc-left-pane">
             <h3>Repository Tree</h3>
             <div className="branch-selector">
@@ -459,7 +468,7 @@ const DocumentPage: React.FC = () => {
             <FileTree nodes={nestedTree} />
           </div>
 
-          {/* RIGHT PANE: Documentation Editor */}
+          {/* RIGHT PANE */}
           <div className="doc-right-pane">
             <h2>Documentation Editor</h2>
             {!isPreview ? (
@@ -470,9 +479,7 @@ const DocumentPage: React.FC = () => {
                     onChange={handleDocChange}
                 />
             ) : (
-                <div className="doc-preview">
-                  {docContent}
-                </div>
+                <div className="doc-preview">{docContent}</div>
             )}
 
             <div className="editor-footer">
@@ -498,7 +505,9 @@ const DocumentPage: React.FC = () => {
   );
 };
 
-/* Build a nested tree structure out of the flat array from GitHub’s “trees” API */
+/* =========================================================
+   Build a nested tree structure from GitHub’s `tree` API
+========================================================= */
 function buildNestedTree(treeItems: TreeItem[]): (FolderNode | FileNode)[] {
   const rootNodes: (FolderNode | FileNode)[] = [];
   for (const item of treeItems) {
@@ -515,6 +524,7 @@ function insertPath(
 ) {
   const [first, ...rest] = parts;
   if (rest.length === 0) {
+    // final part
     if (item.type === 'blob') {
       currentLevel.push({
         name: first,
@@ -573,23 +583,22 @@ function FileNodeUI({ node }: { node: FolderNode | FileNode }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const getFileIcon = (fileName: string) => {
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    if (extension === 'md') return <FiFileText />;
-    if (extension === 'js') return <FaJsSquare />;
-    if (extension === 'ts') return <FaJsSquare />;
-    if (extension === 'json') return <FiFile />;
-    if (extension === 'txt') return <FiFileText />;
-    if (extension === 'css') return <FaCss3Alt />;
-    if (extension === 'html') return <FaHtml5 />;
-    if (/(png|jpg|jpeg|svg)/.test(extension || '')) return <IoIosImage />;
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext === 'md') return <FiFileText />;
+    if (ext === 'js') return <FaJsSquare />;
+    if (ext === 'ts') return <FaJsSquare />;
+    if (ext === 'json') return <FiFile />;
+    if (ext === 'txt') return <FiFileText />;
+    if (ext === 'css') return <FaCss3Alt />;
+    if (ext === 'html') return <FaHtml5 />;
+    if (/(png|jpg|jpeg|svg)/.test(ext || '')) return <IoIosImage />;
     return <FiFile />;
   };
 
   if (node.type === 'file') {
-    const fileIcon = getFileIcon(node.name);
     return (
         <li className="file-item">
-          <span className="file-icon">{fileIcon}</span> {node.name}
+          <span className="file-icon">{getFileIcon(node.name)}</span> {node.name}
         </li>
     );
   } else {
