@@ -1,24 +1,31 @@
+version: "3.9"
+
+networks:
+  echo_net:
+    driver: bridge
+
 services:
+  # ----------  Database  ----------
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: echo_db
     restart: always
+    env_file: .env
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: echodb
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
     volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} || exit 1"]
+      interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - echo_net
+    networks: [echo_net]
 
+  # ----------  Backend API  ----------
   backend:
     build:
       context: ./be
@@ -27,47 +34,61 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "5001:5001"
-
-    # ✅ ADD THIS LINE TO IMPORT FROM .env
-    env_file:
-      - .env
-
+    env_file: .env
     environment:
       DB_HOST: db
-      DB_USER: postgres
-      DB_PASS: postgres
-      DB_NAME: echodb
       DB_PORT: 5432
-      # These will be overridden if defined in .env:
-      GPT_API_KEY: ${GPT_API_KEY}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
-      JWT_SECRET: ${JWT_SECRET}
-      FRONTEND_URL: ${FRONTEND_URL}
-      PORT: ${PORT}
+      DB_USER: ${PGUSER}
+      DB_PASS: ${PGPASSWORD}
+      DB_NAME: ${PGDATABASE}
+      FRONTEND_URL: https://yourdomain.com           # CORS allow‑list
+      PORT: 5001
+    expose: ["5001"]
+    networks: [echo_net]
 
-    networks:
-      - echo_net
-
+  # ----------  Frontend (static build) ----------
   frontend:
     build:
       context: ./fe
       dockerfile: Dockerfile
+      target: prod          # see FE Dockerfile below
     container_name: echo_frontend
-    depends_on:
-      - backend
-    ports:
-      - "5173:5173"
-    environment:
-      VITE_API_BASE_URL: "http://localhost:5001"
-    volumes:
-      - ./fe:/app
-      - /app/node_modules
-    networks:
-      - echo_net
+    depends_on: [backend]
+    expose: ["80"]
+    networks: [echo_net]
 
-networks:
-  echo_net:
-    driver: bridge
+  # ----------  Public reverse‑proxy ----------
+  nginx:
+    image: nginx:alpine
+    container_name: echo_nginx
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    ports:
+      - "80:80"
+      - "443:443"
+    networks: [echo_net]
+    restart: always
+
+  # ----------  Automated Let’s Encrypt renewal ----------
+  certbot:
+    image: certbot/certbot:latest
+    container_name: echo_certbot
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    entrypoint: >
+      sh -c "trap exit TERM;
+             while :; do
+               certbot renew --webroot -w /var/www/certbot --quiet;
+               sleep 12h;
+             done"
+    networks: [echo_net]
+    restart: always
+
+volumes:
+  pgdata:

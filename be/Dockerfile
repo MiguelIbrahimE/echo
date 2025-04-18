@@ -1,15 +1,16 @@
-# be/Dockerfile
-FROM node:22.13.1
-
+# ----------  build  ----------
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# copy your Node packages
 COPY package*.json ./
-RUN npm install
-
-# copy the rest of backend source
+RUN npm ci --omit=dev
 COPY . .
 RUN npx tsc
 
+# ----------  runtime ----------
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/dist  ./dist
+COPY --from=build /app/node_modules ./node_modules
 EXPOSE 5001
 CMD ["node", "dist/server.js"]
