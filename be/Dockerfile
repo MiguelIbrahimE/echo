@@ -1,15 +1,18 @@
 # be/Dockerfile
-FROM node:22.13.1
+FROM node:18
 
 WORKDIR /app
 
-# copy your Node packages
+# ---------- dependencies ----------
 COPY package*.json ./
-RUN npm install
+RUN npm ci --omit=dev
 
-# copy the rest of backend source
-COPY . .
-RUN npx tsc
+# ---------- source ----------
+COPY tsconfig.json ./
+COPY src ./src
+RUN npx tsc               # build -> dist/
 
+# ---------- runtime ----------
+ENV NODE_ENV=production
 EXPOSE 5001
 CMD ["node", "dist/server.js"]
