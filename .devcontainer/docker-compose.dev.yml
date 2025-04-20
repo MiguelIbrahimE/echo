@@ -1,0 +1,18 @@
+# -------------------------------------------------------------------
+#  Overrides that are ONLY active when VS Code launches the container
+# -------------------------------------------------------------------
+services:
+  backend:
+    command: >
+      sh -c "
+        npm i -g nodemon &&
+        nodemon --watch src --ext ts,js,json
+                --exec 'npm run --prefix /workspace/be dev'"
+    volumes:
+       - ..:/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME}:cached
+    working_dir: /workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME}
+
+  frontend:
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ../fe:/app

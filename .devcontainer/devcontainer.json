@@ -1,19 +1,29 @@
+// .devcontainer/devcontainer.json
 {
-  "name": "Dagster Dev Container",
-  "dockerFile": "Dockerfile",
-  "context": "..",
-  "forwardPorts": [3000], // so we can access Dagit at localhost:3000
+  "name": "Echo Workspace",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "backend",            // container VS Code will attach to
+  "workspaceFolder": "/workspaces/echo",
 
-  "postCreateCommand": "pip install -r requirements.txt", // or whatever you need
+  // OPTIONAL: forward ports so you can hit them from your browser
+  "forwardPorts": [5001, 5173],
 
-  // Start Dagit automatically whenever you attach
-  "postStartCommand": "/bin/bash /workspaces/Echo/.devcontainer/run_dagit.sh",
+  /* -----------------------------------------------------------
+     NO initializeCommand here – we keep the build non‑interactive
+     ----------------------------------------------------------- */
 
-  "settings": {
-    // ...
-  },
-  "extensions": [
-    "ms-python.python",
-    "ms-vscode-remote.remote-containers"
-  ]
+  "postCreateCommand": "./.devcontainer/bootstrap.sh",
+
+  /* -----------------------------------------------------------
+     A handy command in the Command Palette to set / change the
+     OpenAI key whenever you like.
+     ----------------------------------------------------------- */
+  "customizations": {
+    "commands": [
+      {
+        "command": "/workspaces/echo/scripts/set-openai-key.sh",
+        "label": "Echo: Insert / Update OpenAI API key"
+      }
+    ]
+  }
 }

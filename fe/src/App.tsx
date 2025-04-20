@@ -70,6 +70,7 @@ function App() {
         }
     }, []);
 
+
     // Modal toggles
     const handleOpenSignUp = () => {
         setIsSignUpOpen(true);
