@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import fetch from 'node-fetch';
 import jwt from 'jsonwebtoken';
-
+import { pool } from '../db';
 const githubAuthRouter = Router();
 
 interface GitHubTokenResponse {

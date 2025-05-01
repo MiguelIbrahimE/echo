@@ -1,8 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { Pool } from 'pg';
 import jwt from 'jsonwebtoken';
+import { pool } from '../db';          // ← shared instance
 
-const pool = new Pool();
 const repositoriesRouter = Router();
 
 /* ---------- JWT guard ---------- */
@@ -13,13 +12,16 @@ function requireLocalJWT(req: AuthRequest, res: Response, next: NextFunction) {
     try {
         req.user = jwt.verify(token, process.env.JWT_SECRET || 'fallback');
         return next();
-    } catch { return res.sendStatus(401); }
+    } catch {
+        return res.sendStatus(401);
+    }
 }
 
-/* ---------- POST /repositories  (save / update PAT) ---------- */
+/* ---------- POST /repositories ---------- */
 repositoriesRouter.post('/', requireLocalJWT, async (req: AuthRequest, res: Response) => {
     const { repoFullName, githubToken } = req.body;
     if (!repoFullName) return res.status(400).json({ message: 'repoFullName required' });
+
     try {
         const userId = req.user.id;
         const { rows } = await pool.query(
