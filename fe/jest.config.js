@@ -1,7 +1,11 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} **/
+/** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
-  testEnvironment: "node",
+  preset: 'ts-jest',
+  testEnvironment: 'jsdom', // Needed for React DOM-related testing
   transform: {
-    "^.+.tsx?$": ["ts-jest",{}],
+    '^.+\\.tsx?$': ['ts-jest', {}],
   },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  testMatch: ['**/__tests__/**/*.(ts|tsx)', '**/?(*.)+(spec|test).(ts|tsx)'],
 };

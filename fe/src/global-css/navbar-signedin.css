@@ -1,0 +1,74 @@
+/* navbar.css */
+
+/* Navbar Container */
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+    background-color: #fff;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Brand (logo/title) */
+.brand {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+/* Right-side container (optional) */
+.nav-right {
+    display: flex;
+    gap: 1rem;
+}
+
+/* Generic nav button */
+.nav-btn {
+    background-color: transparent;
+    border: 1px solid #333;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 0.9rem;
+}
+
+.nav-btn:hover {
+    background-color: #333;
+    color: #fff;
+}
+
+/* “Sign Up” button with different styling */
+.signup-btn {
+    background-color: #333;
+    color: #fff;
+}
+/* =========================================================
+   navbar-signedin.css   –   compact bar for logged-in views
+========================================================= */
+.navbar-signedin {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.75rem;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb; /* gray-200 */
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+.navbar-signedin .brand {
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: #111;
+}
+
+.navbar-signedin .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: #374151; /* gray-700 */
+    cursor: pointer;
+}

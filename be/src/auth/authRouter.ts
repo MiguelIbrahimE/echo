@@ -4,8 +4,7 @@ import axios from 'axios';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { exec } from 'child_process';
-import pool from '../db';  // Adjust if your pg Pool is elsewhere
-
+import { pool } from '../db';
 const router = express.Router();
 
 /* =====================================

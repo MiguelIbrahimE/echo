@@ -2,7 +2,8 @@
 {
   "env": {
     "browser": true, // so ESLint knows about 'window', 'btoa', 'HTMLSelectElement', etc.
-    "node": true     // so ESLint knows about 'NodeJS' types
+    "node": true,     // so ESLint knows about 'NodeJS' types
+    "jest": true
   },
   "parser": "@typescript-eslint/parser", // parse TypeScript
   "parserOptions": {

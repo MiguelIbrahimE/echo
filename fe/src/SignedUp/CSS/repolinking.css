@@ -90,3 +90,9 @@
     margin-top: 0.5rem;
     font-style: italic;
 }
+/* subtle highlight when hovering over a repo button */
+.repo-btn:hover {
+    background: #f0f9ff;          /* sky-50 */
+    border-color: #0ea5e9;        /* sky-500 */
+    color: #0ea5e9;
+}

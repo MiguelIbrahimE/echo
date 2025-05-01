@@ -1,12 +1,17 @@
+# docker‑compose.yml
+# ------------------------------------------------------------
+# Project‑scoped name → resulting containers will be
+#   echo_db_1, echo_backend_1, echo_frontend_1, …
+name: echo
+
 services:
   db:
     image: postgres:15
-    container_name: echo_db
     restart: always
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER:  postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: echodb
+      POSTGRES_DB:  echodb
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
@@ -16,57 +21,47 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - echo_net
+    networks: [echo_net]
 
   backend:
     build:
       context: ./be
       dockerfile: Dockerfile
-    container_name: echo_backend
+    # no container_name → Dev Containers can create/attach safely
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "5001:5001"
-
-    # ✅ ADD THIS LINE TO IMPORT FROM .env
     env_file:
-      - .env
-
-    environment:
+      - .env                     # inherit secrets / API keys
+    environment:                # defaults; can be overriden from .env
       DB_HOST: db
       DB_USER: postgres
       DB_PASS: postgres
       DB_NAME: echodb
       DB_PORT: 5432
-      # These will be overridden if defined in .env:
       GPT_API_KEY: ${GPT_API_KEY}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
-      PORT: ${PORT}
-
-    networks:
-      - echo_net
+      PORT: ${PORT:-5001}
+    networks: [echo_net]
 
   frontend:
     build:
       context: ./fe
       dockerfile: Dockerfile
-    container_name: echo_frontend
-    depends_on:
-      - backend
+    depends_on: [backend]
     ports:
       - "5173:5173"
     environment:
       VITE_API_BASE_URL: "http://localhost:5001"
     volumes:
-      - ./fe:/app
-      - /app/node_modules
-    networks:
-      - echo_net
+      - ./fe:/app          # live‑reload in local dev
+      - /app/node_modules  # keep node_modules inside container
+    networks: [echo_net]
 
 networks:
   echo_net:
