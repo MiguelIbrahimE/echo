@@ -1,16 +1,8 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import App from '../App';
+import App from '../src/App';
 
-// Mock for navigate
-jest.mock('react-router-dom', () => {
-    const actual = jest.requireActual('react-router-dom');
-    return {
-        ...actual,
-        useNavigate: () => jest.fn()
-    };
-});
+
 
 describe('App component', () => {
     beforeEach(() => {

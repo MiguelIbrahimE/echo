@@ -1,6 +1,13 @@
 {
-  "env": {
-    "jest": true
-  },
-  "plugins": ["jest"]
+  "overrides": [
+    {
+      "files": [
+        "**/*.spec.js",
+        "**/*.spec.jsx"
+      ],
+      "env": {
+        "jest": true
+      }
+    }
+  ]
 }

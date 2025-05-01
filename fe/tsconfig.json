@@ -4,7 +4,7 @@
     "module": "ESNext",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "strict": true,
-    "types": ["jest", "node"],
+    "types": ["node", "jest", "@testing-library/jest-dom"],
     "moduleResolution": "bundler", // Keep this for Vite
     "jsx": "react-jsx",
     "noEmit": true,

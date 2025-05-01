@@ -1,35 +1,42 @@
 /* ==========================================
-   DocumentPage.tsx
-   Always shows side-by-side Markdown preview
-   With short wait & retry for newest README
+   DocumentPage.tsx              ✨ 2025-05-01
+   – Shows side-by-side Markdown preview
+   – Always reloads the *latest* README.md
+   – Commits reliably, dark-mode, etc.
 ========================================== */
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
 
-// 1) Import react-markdown + gfm
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import "../global-css/navbar.css";
 import "./CSS/DocPage.css";
 
-import { FiFileText, FiFile, FiFolder } from 'react-icons/fi';
+import {
+  FiFileText,
+  FiFile,
+  FiFolder,
+} from 'react-icons/fi';
 import { FaJsSquare, FaCss3Alt, FaHtml5 } from 'react-icons/fa';
 import { IoIosImage } from 'react-icons/io';
+
 import ProgressModal from './ProgressModal';
 
-interface JwtPayload {
-  username?: string;
-}
-
+/* ---------- helper types ---------- */
+interface JwtPayload { username?: string; }
 function parseJwt(token: string): JwtPayload | null {
   try {
     const base64Payload = token.split('.')[1];
     const payload = atob(base64Payload);
     return JSON.parse(payload);
-  } catch (err) {
-    console.error('Failed to parse token', err);
+  } catch {
     return null;
   }
 }
@@ -40,22 +47,15 @@ interface TreeItem {
   type: 'blob' | 'tree';
   sha: string;
   size?: number;
-  url: string;
 }
 
 interface GitTreeResponse {
-  sha: string;
-  url: string;
   tree: TreeItem[];
-  truncated: boolean;
 }
 
 interface Branch {
   name: string;
-  commit: {
-    sha: string;
-    url: string;
-  };
+  commit: { sha: string; url: string; };
   protected: boolean;
 }
 
@@ -65,7 +65,6 @@ type FileNode = {
   path: string;
   sha: string;
 };
-
 type FolderNode = {
   name: string;
   type: 'folder';
@@ -74,77 +73,138 @@ type FolderNode = {
   children: (FolderNode | FileNode)[];
 };
 
+/* =================================================================== */
+
 const DocumentPage: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate   = useNavigate();
+  const location   = useLocation();
 
-  // Logged in user (from local JWT)
+  /* -------- user / UI state -------- */
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+  const [isDarkMode,   setIsDarkMode]   = useState(false);
 
-  // GitHub-related states
-  const [token, setToken] = useState('');
-  const [repoFullName, setRepoFullName] = useState('');
-  const [branches, setBranches] = useState<Branch[]>([]);
+  /* -------- GitHub state -------- */
+  const [token,          setToken]          = useState('');
+  const [repoFullName,   setRepoFullName]   = useState('');
+  const [branches,       setBranches]       = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
-  const [treeItems, setTreeItems] = useState<TreeItem[]>([]);
-  const [nestedTree, setNestedTree] = useState<(FolderNode | FileNode)[]>([]);
+  const [treeItems,      setTreeItems]      = useState<TreeItem[]>([]);
+  const [nestedTree,     setNestedTree]     = useState<(FolderNode | FileNode)[]>([]);
 
-  // Editor states
-  const [docContent, setDocContent] = useState<string>('');
+  /* -------- editor state -------- */
+  const [docContent,  setDocContent]  = useState('');
   const [isAutosaved, setIsAutosaved] = useState(false);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // “Generate Manual” modal states
+  /* -------- modal state -------- */
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
+  const [isComplete,   setIsComplete]   = useState(false);
 
-  // Dark mode
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
-  // ============================================
-  // On mount -> parse data & load
-  // ============================================
+  /* ================================================================
+     1.  On mount → read query params, cookies, JWT, branches, README
+  ================================================================= */
   useEffect(() => {
-    // (1) Dark mode
+    /* dark-mode cookie */
     const darkCookie = Cookies.get('darkMode');
     if (darkCookie === 'true') {
       setIsDarkMode(true);
       document.documentElement.classList.add('dark-mode');
     }
 
-    // (2) Check local JWT
+    /* local JWT (for “Signed in as …”) */
     const storedToken = localStorage.getItem('myAppToken');
-    if (storedToken) {
-      const decoded = parseJwt(storedToken);
-      if (decoded?.username) {
-        setLoggedInUser(decoded.username);
-      }
-    }
+    const decoded     = storedToken ? parseJwt(storedToken) : null;
+    if (decoded?.username) setLoggedInUser(decoded.username);
 
-    // (3) Get ?repo= & ?token= from URL
-    const params = new URLSearchParams(location.search);
-    const repo = params.get('repo') || '';
-    const ghToken = params.get('token') || '';
+    /* repo + PAT from query string */
+    const params  = new URLSearchParams(location.search);
+    const repo    = params.get('repo')   || '';
+    const ghToken = params.get('token')  || '';
     setRepoFullName(repo);
     setToken(ghToken);
 
-    // (4) If GH token + repo -> fetch branches
     if (repo && ghToken) {
       fetchBranches(repo, ghToken);
-    } else {
-      console.log('[DocumentPage] No repo or token in URL.', { repo, ghToken });
-    }
-
-    // (5) Load doc content from localStorage
-    const savedDoc = localStorage.getItem('docContent');
-    if (savedDoc) {
-      setDocContent(savedDoc);
     }
   }, [location.search]);
 
-  // ============================================
-  // Toggle dark mode
-  // ============================================
+  /* ----------------------------------------------------------------
+     2.  Whenever the selected branch changes     ★ fetch fresh README
+  ---------------------------------------------------------------- */
+  useEffect(() => {
+    if (!repoFullName || !token || !selectedBranch) return;
+    fetchReadme(repoFullName, token, selectedBranch)
+        .then((readme) => {
+          /* only overwrite if the user hasn’t typed yet */
+          const userEditing = typingTimerRef.current !== null;
+          if (!userEditing && readme) setDocContent(readme);
+        })
+        .catch((e) => console.warn('README fetch failed:', e));
+  }, [repoFullName, token, selectedBranch]);
+
+  /* ----------------------------------------------------------------
+     3.  Build <ul> tree once the flat array arrives
+  ---------------------------------------------------------------- */
+  useEffect(() => {
+    setNestedTree(
+        treeItems.length ? buildNestedTree(treeItems) : []
+    );
+  }, [treeItems]);
+
+  /* ================================================================
+     Fetch helpers
+  ================================================================= */
+  async function fetchBranches(repo: string, accessToken: string) {
+    try {
+      const [owner, repoName] = repo.split('/');
+      const url = `https://api.github.com/repos/${owner}/${repoName}/branches`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error(`GitHub …/branches → ${res.status}`);
+      const data: Branch[] = await res.json();
+      setBranches(data);
+
+      const main = data.find(b => b.name === 'main') || data[0];
+      setSelectedBranch(main.name);
+      await fetchFileTree(repo, accessToken, main.commit.sha);
+    } catch (err) {
+      console.error('[fetchBranches]', err);
+    }
+  }
+
+  async function fetchFileTree(repo: string, accessToken: string, sha: string) {
+    const [owner, repoName] = repo.split('/');
+    const url = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${sha}?recursive=1`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) throw new Error(`GitHub …/git/trees → ${res.status}`);
+    const data: GitTreeResponse = await res.json();
+    setTreeItems(data.tree);
+  }
+
+  /* ★ fresh README loader – reusable for branch changes */
+  async function fetchReadme(
+      repoFull: string,
+      accessToken: string,
+      ref: string   /* branch name or sha */
+  ): Promise<string | null> {
+    const [owner, repo] = repoFull.split('/');
+    const url = `https://api.github.com/repos/${owner}/${repo}/contents/README.md?ref=${ref}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.content
+        ? atob(json.content as string)
+        : null;
+  }
+
+  /* ================================================================
+     UI event handlers
+  ================================================================= */
   const toggleDarkMode = () => {
     const html = document.documentElement;
     if (isDarkMode) {
@@ -157,319 +217,146 @@ const DocumentPage: React.FC = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  // ============================================
-  // Fetch branches
-  // ============================================
-  async function fetchBranches(repo: string, accessToken: string) {
-    try {
-      const [owner, repoName] = repo.split('/');
-      const url = `https://api.github.com/repos/${owner}/${repoName}/branches`;
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!resp.ok) {
-        throw new Error(`[fetchBranches] Error: ${resp.status} ${resp.statusText}`);
-      }
-      const data: Branch[] = await resp.json();
-      setBranches(data);
-
-      if (data.length > 0) {
-        const mainBranch = data.find(b => b.name === 'main') || data[0];
-        setSelectedBranch(mainBranch.name);
-        await fetchFileTree(repo, accessToken, mainBranch.commit.sha);
-      }
-    } catch (err) {
-      console.error('[fetchBranches] Error:', err);
-    }
-  }
-
-  // ============================================
-  // Fetch file tree
-  // ============================================
-  async function fetchFileTree(repo: string, accessToken: string, commitSha: string) {
-    try {
-      const [owner, repoName] = repo.split('/');
-      const url = `https://api.github.com/repos/${owner}/${repoName}/git/trees/${commitSha}?recursive=1`;
-      const resp = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!resp.ok) {
-        throw new Error(`[fetchFileTree] Error: ${resp.status} ${resp.statusText}`);
-      }
-      const data: GitTreeResponse = await resp.json();
-      setTreeItems(data.tree);
-    } catch (err) {
-      console.error('[fetchFileTree] Error:', err);
-    }
-  }
-
-  // Build nested structure after we get treeItems
-  useEffect(() => {
-    if (treeItems.length === 0) {
-      setNestedTree([]);
-      return;
-    }
-    const root = buildNestedTree(treeItems);
-    setNestedTree(root);
-  }, [treeItems]);
-
-  // On branch change
-  const handleBranchChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newBranch = e.target.value;
-    setSelectedBranch(newBranch);
-    const branchObj = branches.find(b => b.name === newBranch);
-    if (branchObj) {
-      await fetchFileTree(repoFullName, token, branchObj.commit.sha);
-    }
+  const handleBranchChange = async (
+      e: React.ChangeEvent<HTMLSelectElement>
+  ) => {
+    setSelectedBranch(e.target.value);
   };
 
-  // ============================================
-  // Editor changes -> autosave
-  // ============================================
   const handleDocChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    setDocContent(newValue);
+    const newVal = e.target.value;
+    setDocContent(newVal);
     setIsAutosaved(false);
-
-    if (typingTimerRef.current) {
-      clearTimeout(typingTimerRef.current);
-    }
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => {
-      localStorage.setItem('docContent', newValue);
+      localStorage.setItem('docContent', newVal);
       setIsAutosaved(true);
-    }, 1000);
+      typingTimerRef.current = null;
+    }, 1_000);
   };
 
-  // --------------------------------------------
-  // If you want code syntax highlighting, you can do more with react-syntax-highlighter or rehype-plugins
-  // but let's keep it simple with just GFM
-  // --------------------------------------------
-
-  // A little sleep helper
-  async function sleep(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  // Attempt re-fetch of README from the new commit
-  async function fetchReadmeWithRetry(
-      owner: string,
-      repoName: string,
-      commitSha: string,
-      attempts = 3
-  ): Promise<string | null> {
-    const readmeUrl = `https://api.github.com/repos/${owner}/${repoName}/contents/README.md?ref=${commitSha}`;
-
-    for (let i = 1; i <= attempts; i++) {
-      console.log(`[fetchReadmeWithRetry] Attempt #${i} for commit=${commitSha}`);
-      const resp = await fetch(readmeUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!resp.ok) {
-        console.warn(`[fetchReadmeWithRetry] Attempt #${i} => status=${resp.status}`);
-        await sleep(1000);
-        continue;
-      }
-
-      const jsonData = await resp.json();
-      if (jsonData.content) {
-        return atob(jsonData.content);
-      }
-
-      console.warn(`[fetchReadmeWithRetry] Attempt #${i} => no "content" field returned.`);
-      await sleep(1000);
-    }
-
-    return null;
-  }
-
-  // getFileSha
-  const getFileSha = useCallback(
-      async (path: string) => {
-        if (!repoFullName || !token || !selectedBranch) {
-          console.warn('[getFileSha] Missing info:', { repoFullName, token, selectedBranch });
-          return null;
-        }
-        const [owner, repoName] = repoFullName.split('/');
-        const url = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}?ref=${selectedBranch}`;
-        try {
-          const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-          if (!resp.ok) {
-            console.error('[getFileSha] Failed. status=', resp.status);
-            return null;
-          }
-          const data = await resp.json();
-          return data.sha;
-        } catch (err) {
-          console.error('[getFileSha] error:', err);
-          return null;
-        }
-      },
-      [repoFullName, token, selectedBranch]
-  );
-
-  // handleCommitToGithub -> do PUT, then fetch updated README
+  /* ★ commit to GitHub then pull latest README */
   const handleCommitToGithub = useCallback(async () => {
-    if (!repoFullName || !token || !selectedBranch) {
-      console.warn('[handleCommitToGithub] Missing data:', { repoFullName, token, selectedBranch });
-      return;
-    }
-
+    if (!repoFullName || !token || !selectedBranch) return alert('Missing repo/token.');
     const path = 'README.md';
-    const sha = await getFileSha(path);
-    console.log('[handleCommitToGithub] current README.md sha:', sha);
 
-    const base64Content = btoa(docContent || '');
-    const message = `Update doc from DocumentPage on branch ${selectedBranch}`;
+    /* get current sha */
+    const [owner, repo] = repoFullName.split('/');
+    const shaRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${selectedBranch}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!shaRes.ok) return alert('Could not fetch README sha.');
+    const shaJson = await shaRes.json();
+    const currentSha = shaJson.sha;
 
-    try {
-      const [owner, repoName] = repoFullName.split('/');
-      const url = `https://api.github.com/repos/${owner}/${repoName}/contents/${path}?ref=${selectedBranch}`;
-      const putResp = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          Accept: 'application/vnd.github+json',
-        },
-        body: JSON.stringify({ message, content: base64Content, sha: sha || undefined }),
-      });
-
-      if (!putResp.ok) {
-        const msg = await putResp.text();
-        throw new Error(`GitHub commit failed: ${msg}`);
-      }
-
-      const putJson = await putResp.json();
-      const newCommitSha = putJson.commit?.sha;
-      console.log('[handleCommitToGithub] New commit SHA:', newCommitSha);
-
-      if (!newCommitSha) {
-        alert('Committed, but could not find new commit SHA. Something is off.');
-        return;
-      }
-
-      // 1) Refresh file tree with new commit
-      await fetchFileTree(repoFullName, token, newCommitSha);
-
-      // 2) Attempt to fetch new README with small wait
-      const newReadme = await fetchReadmeWithRetry(owner, repoName, newCommitSha, 3);
-      if (newReadme) {
-        setDocContent(newReadme);
-        alert('Committed README.md successfully, and loaded newest version!');
-      } else {
-        alert('Committed successfully, but could not fetch updated content after 3 tries.');
-      }
-    } catch (err) {
-      console.error('[handleCommitToGithub] Error:', err);
-      alert(`Error committing to GitHub: ${err}`);
+    /* PUT */
+    const put = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/vnd.github+json',
+          },
+          body: JSON.stringify({
+            message: `Update README via echo DocumentPage (${selectedBranch})`,
+            content: btoa(docContent),
+            sha: currentSha,
+            branch: selectedBranch,
+          }),
+        }
+    );
+    if (!put.ok) {
+      const msg = await put.text();
+      return alert(`GitHub commit failed:\n${msg}`);
     }
-  }, [
-    docContent,
-    repoFullName,
-    selectedBranch,
-    token,
-    getFileSha
-  ]);
+    const putJson = await put.json();
+    const newCommitSha = putJson.commit?.sha;
 
-  // Generate user manual
+    /* get fresh tree + README */
+    await fetchFileTree(repoFullName, token, newCommitSha);
+    const fresh = await fetchReadme(repoFullName, token, newCommitSha);
+    if (fresh) setDocContent(fresh);
+    alert('Committed successfully!');
+  }, [docContent, repoFullName, token, selectedBranch]);
+
+  /* Generate user manual (unchanged) */
   const handleGenerateUserManual = async () => {
-    if (!repoFullName || !token || !selectedBranch) {
-      console.warn('[handleGenerateUserManual] Missing info:', { repoFullName, token, selectedBranch });
-      return;
-    }
+    if (!repoFullName || !token || !selectedBranch) return alert('Missing repo/token.');
     setIsGenerating(true);
     setIsComplete(false);
-
     try {
-      const response = await fetch('http://localhost:5001/documents/analyze-repository', {
+      const res = await fetch('http://localhost:5001/documents/analyze-repository', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoFullName, token, selectedBranch }),
       });
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`[handleGenerateUserManual] ${errText}`);
-      }
-
-      const data = await response.json();
-      let finalText = '';
-      if (typeof data.userManual === 'string') {
-        finalText = data.userManual;
-      } else if (data.userManual?.userManual) {
-        finalText = data.userManual.userManual;
-      } else {
-        finalText = JSON.stringify(data, null, 2);
-      }
-
-      setDocContent(finalText);
+      if (!res.ok) throw new Error(await res.text());
+      const json = await res.json();
+      setDocContent(
+          typeof json.userManual === 'string'
+              ? json.userManual
+              : JSON.stringify(json, null, 2)
+      );
       setIsComplete(true);
     } catch (err) {
-      console.error('[handleGenerateUserManual] Error:', err);
-      alert('Error generating user manual. See console.');
+      console.error(err);
+      alert('Error generating manual – see console.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleCloseModal = () => {
-    setIsGenerating(false);
-  };
-
-  const goBack = () => navigate(-1);
-
-  // ============================================
-  // RENDER
-  // ============================================
+  /* ================================================================
+     Render
+  ================================================================= */
   return (
       <>
         <nav className="navbar">
-          <a href="/" className="brand" style={{ textDecoration: 'none', color: 'grey' }}>
-            echo
-          </a>
+          <a href="/" className="brand">echo</a>
           <div className="nav-right">
-            {loggedInUser ? <p>Signed in as: {loggedInUser}</p> : <p>Not signed in</p>}
-            <button onClick={toggleDarkMode} style={{ marginLeft: '1rem', cursor: 'pointer' }}>
+            {loggedInUser
+                ? <p>Signed in as: {loggedInUser}</p>
+                : <p>Not signed in</p>}
+            <button onClick={toggleDarkMode}>
               {isDarkMode ? 'Light Mode' : 'Dark Mode'}
             </button>
           </div>
         </nav>
 
         <div className="doc-container">
-          <ProgressModal isVisible={isGenerating} isComplete={isComplete} onClose={handleCloseModal} />
+          <ProgressModal
+              isVisible={isGenerating}
+              isComplete={isComplete}
+              onClose={() => setIsGenerating(false)}
+          />
 
-          {/* LEFT PANE: Tree */}
-          <div className="doc-left-pane">
+          {/* ---------- LEFT: tree ---------- */}
+          <aside className="doc-left-pane">
             <h3>Repository Tree</h3>
-            <div className="branch-selector">
-              <label>
-                Branch:
-                <select value={selectedBranch} onChange={handleBranchChange}>
-                  {branches.map(b => (
-                      <option key={b.name} value={b.name}>
-                        {b.name}
-                      </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <label className="branch-selector">
+              Branch:&nbsp;
+              <select value={selectedBranch} onChange={handleBranchChange}>
+                {branches.map(b => (
+                    <option key={b.name}>{b.name}</option>
+                ))}
+              </select>
+            </label>
             <FileTree nodes={nestedTree} />
-          </div>
+          </aside>
 
-          {/* RIGHT PANE: Editor + side-by-side MD preview */}
-          <div className="doc-right-pane">
+          {/* ---------- RIGHT: editor + preview ---------- */}
+          <main className="doc-right-pane">
             <h2>Documentation Editor</h2>
-
-            {/* editor-split container */}
             <div className="editor-split">
             <textarea
                 className="doc-textarea"
-                placeholder="Type Markdown here..."
+                placeholder="Type Markdown here…"
                 value={docContent}
                 onChange={handleDocChange}
             />
-
-              {/* 2) Here's our Markdown preview using `react-markdown` & `remark-gfm` */}
               <div className="doc-preview">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {docContent}
@@ -477,141 +364,96 @@ const DocumentPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="editor-footer">
-              <button className="btn" onClick={goBack}>Back</button>
-              {isAutosaved ? (
-                  <span className="autosave-status">Autosaved</span>
-              ) : (
-                  <span className="autosave-status typing">Typing...</span>
-              )}
-              <button className="btn commit-btn" onClick={handleCommitToGithub}>
-                Commit
-              </button>
-              <button className="btn generate-btn" onClick={handleGenerateUserManual}>
-                Generate User Manual
-              </button>
-            </div>
-          </div>
+            <footer className="editor-footer">
+              <button className="btn" onClick={() => navigate(-1)}>Back</button>
+              <span className="autosave-status">
+              {isAutosaved ? 'Autosaved' : 'Typing…'}
+            </span>
+              <button className="btn commit-btn"    onClick={handleCommitToGithub}>Commit</button>
+              <button className="btn generate-btn" onClick={handleGenerateUserManual}>Generate&nbsp;User&nbsp;Manual</button>
+            </footer>
+          </main>
         </div>
       </>
   );
 };
 
-/* =========================================================
-   buildNestedTree, same as before
-========================================================= */
-function buildNestedTree(treeItems: TreeItem[]): (FolderNode | FileNode)[] {
-  const rootNodes: (FolderNode | FileNode)[] = [];
-  for (const item of treeItems) {
-    const parts = item.path.split('/');
-    insertPath(rootNodes, parts, item);
-  }
-  return rootNodes;
+/* ==================== helpers (unchanged) ==================== */
+function buildNestedTree(tree: TreeItem[]): (FolderNode | FileNode)[] {
+  const root: (FolderNode | FileNode)[] = [];
+  tree.forEach(t => insertPath(root, t.path.split('/'), t));
+  return root;
 }
-
 function insertPath(
-    currentLevel: (FolderNode | FileNode)[],
+    lvl: (FolderNode | FileNode)[],
     parts: string[],
     item: TreeItem
 ) {
-  const [first, ...rest] = parts;
-  if (rest.length === 0) {
-    // final part
-    if (item.type === 'blob') {
-      currentLevel.push({
-        name: first,
-        type: 'file',
-        path: item.path,
-        sha: item.sha,
-      });
-    } else {
-      currentLevel.push({
-        name: first,
-        type: 'folder',
-        path: item.path,
-        sha: item.sha,
-        children: [],
-      } as FolderNode);
-    }
+  const [segment, ...rest] = parts;
+  if (!rest.length) {
+    lvl.push(item.type === 'blob'
+        ? { name: segment, type: 'file',   path: item.path, sha: item.sha }
+        : { name: segment, type: 'folder', path: item.path, sha: item.sha, children: [] }
+    );
     return;
   }
-
-  let folderNode = currentLevel.find(
-      (node) => node.type === 'folder' && node.name === first
-  ) as FolderNode | undefined;
-
-  if (!folderNode) {
-    folderNode = {
-      name: first,
-      type: 'folder',
-      path: '',
-      sha: '',
-      children: [],
-    };
-    currentLevel.push(folderNode);
+  let folder = lvl.find(n => n.type === 'folder' && n.name === segment) as FolderNode;
+  if (!folder) {
+    folder = { name: segment, type: 'folder', path: '', sha: '', children: [] };
+    lvl.push(folder);
   }
-  insertPath(folderNode.children, rest, item);
+  insertPath(folder.children, rest, item);
 }
 
+/* ======== tree UI ======== */
 function FileTree({ nodes }: { nodes: (FolderNode | FileNode)[] }) {
-  // Sort so folders appear before files
-  nodes.sort((a, b) => {
-    if (a.type === 'folder' && b.type === 'file') return -1;
-    if (a.type === 'file' && b.type === 'folder') return 1;
-    return a.name.localeCompare(b.name);
-  });
-
+  const sorted = [...nodes].sort((a, b) => (
+      a.type === b.type
+          ? a.name.localeCompare(b.name)
+          : a.type === 'folder' ? -1 : 1
+  ));
   return (
       <ul className="file-tree">
-        {nodes.map((node) => (
-            <FileNodeUI key={node.path || node.name} node={node} />
-        ))}
+        {sorted.map(n => <FileNodeUI key={n.path || n.name} node={n} />)}
       </ul>
   );
 }
-
 function FileNodeUI({ node }: { node: FolderNode | FileNode }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const getFileIcon = (fileName: string) => {
-    const ext = fileName.split('.').pop()?.toLowerCase();
-    if (ext === 'md') return <FiFileText />;
-    if (ext === 'js') return <FaJsSquare />;
-    if (ext === 'ts') return <FaJsSquare />;
-    if (ext === 'json') return <FiFile />;
-    if (ext === 'txt') return <FiFileText />;
-    if (ext === 'css') return <FaCss3Alt />;
-    if (ext === 'html') return <FaHtml5 />;
-    if (/(png|jpg|jpeg|svg)/.test(ext || '')) return <IoIosImage />;
-    return <FiFile />;
+  const [open, setOpen] = useState(false);
+  const getIcon = (name: string) => {
+    const ext = name.split('.').pop()?.toLowerCase();
+    if (ext === 'md') return <FiFileText/>;
+    if (['js','ts'].includes(ext!)) return <FaJsSquare/>;
+    if (ext === 'json') return <FiFile/>;
+    if (ext === 'txt')  return <FiFileText/>;
+    if (ext === 'css')  return <FaCss3Alt/>;
+    if (ext === 'html') return <FaHtml5/>;
+    if (/png|jpe?g|svg/.test(ext!)) return <IoIosImage/>;
+    return <FiFile/>;
   };
-
   if (node.type === 'file') {
     return (
         <li className="file-item">
-          <span className="file-icon">{getFileIcon(node.name)}</span> {node.name}
-        </li>
-    );
-  } else {
-    // folder
-    const toggleOpen = () => setIsOpen(!isOpen);
-    return (
-        <li className="folder-item">
-          <div className="folder-label" onClick={toggleOpen}>
-            <span className="folder-arrow">{isOpen ? '▼' : '▶'}</span>
-            <span className="folder-icon"><FiFolder /></span>
-            {node.name}
-          </div>
-          {isOpen && (
-              <ul className="folder-children">
-                {node.children.map((child) => (
-                    <FileNodeUI key={child.path || child.name} node={child} />
-                ))}
-              </ul>
-          )}
+          <span className="file-icon">{getIcon(node.name)}</span> {node.name}
         </li>
     );
   }
+  return (
+      <li className="folder-item">
+        <div className="folder-label" onClick={() => setOpen(!open)}>
+          <span className="folder-arrow">{open ? '▼' : '▶'}</span>
+          <span className="folder-icon"><FiFolder/></span>
+          {node.name}
+        </div>
+        {open && (
+            <ul className="folder-children">
+              {node.children.map(c => (
+                  <FileNodeUI key={c.path || c.name} node={c}/>
+              ))}
+            </ul>
+        )}
+      </li>
+  );
 }
 
 export default DocumentPage;
