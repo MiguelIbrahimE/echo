@@ -54,7 +54,7 @@ const MyDocuments: React.FC = () => {
             <nav className="navbar-signedin">
                 <a href="/" className="brand">echo</a>
                 <div className="nav-right">
-                    <FaUserCircle size={26} />
+                    <FaUserCircle size={26} onClick={() => nav('/settings')} style={{cursor:'pointer'}} />
                 </div>
             </nav>
 

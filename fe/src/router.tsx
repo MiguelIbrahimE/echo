@@ -4,6 +4,7 @@ import LinkGithubRepo from './SignedUp/LinkGithubRepo';
 import DocumentPage from './SignedUp/DocumentPage';
 import MyDocuments from './SignedUp/MyDocuments';
 import MyErrorBoundary from './MyErrorBoundary';
+import Settings from './SignedUp/Settings';
 
 const router = createBrowserRouter([
     {
@@ -29,6 +30,10 @@ const router = createBrowserRouter([
         /* alias – keeps old /documents URL working */
         path: '/documents',
         element: <MyDocuments />,
+    },
+    {
+     path: '/settings',
+        element: <Settings />
     },
 ]);
 
