@@ -1,355 +1,288 @@
+/* =========================================================
+   App.tsx – landing page, auth modals, recent docs
+   Full drop‑in version (2025‑05‑01)
+========================================================= */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiMenu } from 'react-icons/fi';
 import { FaGoogle, FaGithub } from 'react-icons/fa';
 import './App.css';
-import '../src/global-css/navbar.css';
+import './global-css/navbar.css';
 
 interface ApiResponse {
     message?: string;
     token?: string;
     username?: string;
 }
+interface DocBrief {
+    id: number;
+    title: string;
+    repo_full_name: string | null;
+    branch_name: string | null;
+    updated_at: string;
+}
 
+/* ---------------- helpers ---------------- */
 function parseJwt(token: string) {
     try {
-        const base64Payload = token.split('.')[1];
-        const payload = atob(base64Payload);
-        return JSON.parse(payload);
-    } catch (e) {
-        console.error('Failed to parse token', e);
+        return JSON.parse(atob(token.split('.')[1]));
+    } catch {
         return null;
     }
 }
 
-function App() {
+/* ================= component ============== */
+const App: React.FC = () => {
     const navigate = useNavigate();
 
-    // Modals
-    const [isSignUpOpen, setIsSignUpOpen] = useState(false);
-    const [isLoginOpen, setIsLoginOpen] = useState(false);
-
-    // User
+    /* ---------- auth / UI state ---------- */
     const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
+    const [isMenuOpen, setIsMenuOpen]     = useState(false);
+    const [recentDocs, setRecentDocs]     = useState<DocBrief[]>([]);
 
-    // Nav menu
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    /* ---------- modal state (signup / login) ---------- */
+    const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+    const [isLoginOpen, setIsLoginOpen]   = useState(false);
 
-    // Sign-up fields
-    const [email, setEmail] = useState('');
-    const [emailError, setEmailError] = useState('');
+    /* ---------- sign‑up fields ---------- */
+    const [email, setEmail]                         = useState('');
+    const [username, setUsername]                   = useState('');
+    const [password, setPassword]                   = useState('');
+    const [confirmPassword, setConfirmPassword]     = useState('');
+    const [rememberMe, setRememberMe]               = useState(false);
 
-    const [username, setUsername] = useState('');
-    const [usernameError, setUsernameError] = useState('');
-
-    const [password, setPassword] = useState('');
-    const [passwordError, setPasswordError] = useState('');
-
-    const [confirmPassword, setConfirmPassword] = useState('');
+    const [emailError, setEmailError]               = useState('');
+    const [usernameError, setUsernameError]         = useState('');
+    const [passwordError, setPasswordError]         = useState('');
     const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
-    const [rememberMe, setRememberMe] = useState(false);
-
-    // Password strength
+    /* password criteria flags */
     const [hasMinLength, setHasMinLength] = useState(false);
     const [hasUppercase, setHasUppercase] = useState(false);
-    const [hasNumber, setHasNumber] = useState(false);
+    const [hasNumber, setHasNumber]       = useState(false);
     const [hasSpecialChar, setHasSpecialChar] = useState(false);
 
-    // Login form
+    /* ---------- login fields ---------- */
     const [loginUsername, setLoginUsername] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
 
+    /* =====================================================
+       1)  Check JWT on mount
+    ===================================================== */
     useEffect(() => {
         const token = localStorage.getItem('myAppToken');
         if (token) {
             const decoded = parseJwt(token);
-            if (decoded && decoded.username) {
-                setLoggedInUser(decoded.username);
-            }
+            if (decoded?.username) setLoggedInUser(decoded.username);
         }
     }, []);
 
+    /* =====================================================
+       2)  Fetch recent documents once we know user is logged
+    ===================================================== */
+    useEffect(() => {
+        if (!loggedInUser) return;
+        (async () => {
+            try {
+                const jwt = localStorage.getItem('myAppToken');
+                const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/documents/recent`, {
+                    headers: { Authorization: `Bearer ${jwt}` },
+                });
+                if (res.ok) {
+                    const docs: DocBrief[] = await res.json();
+                    setRecentDocs(docs);
+                }
+            } catch (e) {
+                console.error('Error fetching recent docs', e);
+            }
+        })();
+    }, [loggedInUser]);
 
-    // Modal toggles
-    const handleOpenSignUp = () => {
-        setIsSignUpOpen(true);
-        setIsLoginOpen(false);
+    /* =====================================================
+       Validation helpers
+    ===================================================== */
+    const validateEmail = (val: string) => {
+        setEmail(val);
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        setEmailError(re.test(val) ? '' : 'Invalid email format');
     };
-    const handleCloseSignUp = () => {
-        // reset
-        setEmail('');
-        setUsername('');
-        setPassword('');
-        setConfirmPassword('');
-        setRememberMe(false);
-        setEmailError('');
-        setUsernameError('');
-        setPasswordError('');
-        setConfirmPasswordError('');
-        setHasMinLength(false);
-        setHasUppercase(false);
-        setHasNumber(false);
-        setHasSpecialChar(false);
-        setIsSignUpOpen(false);
+    const validateUsername = (val: string) => {
+        const re = /^[A-Za-z0-9._]+$/;
+        if (!re.test(val)) setUsernameError('Only letters, digits, _ and . allowed');
+        else if (val.trim().length < 3) setUsernameError('At least 3 characters');
+        else setUsernameError('');
+        setUsername(val);
     };
-    const handleOpenLogin = () => {
-        setIsLoginOpen(true);
-        setIsSignUpOpen(false);
+    const handlePasswordChange = (val: string) => {
+        setPassword(val);
+        setHasMinLength(val.length >= 8);
+        setHasUppercase(/[A-Z]/.test(val));
+        setHasNumber(/[0-9]/.test(val));
+        setHasSpecialChar(/[^A-Za-z0-9]/.test(val));
+        const strong = val.length >= 8 && /[A-Z]/.test(val) && /[0-9]/.test(val) && /[^A-Za-z0-9]/.test(val);
+        setPasswordError(val && !strong ? 'Password is not strong enough' : '');
     };
-    const handleCloseLogin = () => {
-        setLoginUsername('');
-        setLoginPassword('');
-        setIsLoginOpen(false);
-    };
-
-    // Validations
-    const validateEmail = (value: string) => {
-        setEmail(value);
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(value)) {
-            setEmailError('Invalid email format');
-        } else {
-            setEmailError('');
-        }
-    };
-
-    const validateUsername = (value: string) => {
-        const usernameRegex = /^[A-Za-z0-9._]+$/;
-        if (!usernameRegex.test(value)) {
-            setUsernameError('Username can only contain letters, digits, underscores, and periods.');
-        } else if (value.trim().length < 3) {
-            setUsernameError('Username must be at least 3 characters long.');
-        } else {
-            setUsernameError('');
-        }
-        setUsername(value);
+    const handleConfirmPassword = (val: string) => {
+        setConfirmPassword(val);
+        setConfirmPasswordError(val && val !== password ? 'Passwords do not match' : '');
     };
 
-    const handlePasswordChange = (value: string) => {
-        setPassword(value);
-        setHasMinLength(value.length >= 8);
-        setHasUppercase(/[A-Z]/.test(value));
-        setHasNumber(/[0-9]/.test(value));
-        setHasSpecialChar(/[^A-Za-z0-9]/.test(value));
+    /* =====================================================
+       OAuth placeholders
+    ===================================================== */
+    const handleGoogleSignIn = () => alert('Redirecting to Google OAuth…');
+    const handleGithubSignIn = () => navigate('/link-github');
 
-        if (
-            value.length > 0 &&
-            (value.length < 8 ||
-                !/[A-Z]/.test(value) ||
-                !/[0-9]/.test(value) ||
-                !/[^A-Za-z0-9]/.test(value))
-        ) {
-            setPasswordError('Password is not strong enough');
-        } else {
-            setPasswordError('');
-        }
-    };
-
-    const handleConfirmPassword = (value: string) => {
-        setConfirmPassword(value);
-        if (value && value !== password) {
-            setConfirmPasswordError('Passwords do not match');
-        } else {
-            setConfirmPasswordError('');
-        }
-    };
-
-    // OAuth handlers
-    const handleGoogleSignIn = () => {
-        alert('Redirecting to Google OAuth...');
-    };
-    const handleGithubSignIn = () => {
-        // We can route to /linkGithubRepo if we want
-        navigate('/link-github');
-    };
-
-    // SIGN-UP
+    /* =====================================================
+       Signup / Login API handlers
+    ===================================================== */
     const handleSignUpSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (emailError || usernameError || passwordError || confirmPasswordError) {
-            alert('Please fix errors before submitting.');
-            return;
-        }
-        if (!username) {
-            setUsernameError('Username is required');
-            return;
-        }
-        if (password !== confirmPassword) {
-            setConfirmPasswordError('Passwords do not match');
-            return;
-        }
-        if (!hasMinLength || !hasUppercase || !hasNumber || !hasSpecialChar) {
-            alert('Please meet all password criteria.');
-            return;
-        }
+        if (emailError || usernameError || passwordError || confirmPasswordError) return alert('Fix errors first');
+        if (!username) return setUsernameError('Username is required');
+        if (password !== confirmPassword) return setConfirmPasswordError('Passwords do not match');
+        if (!(hasMinLength && hasUppercase && hasNumber && hasSpecialChar)) return alert('Password criteria not met');
         try {
-            // Adjust to your actual backend signup endpoint
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/signup`, {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, username, password, rememberMe }),
             });
-            let data: ApiResponse = {};
-            try {
-                data = await response.json();
-            } catch (err) {
-                console.error('Error parsing JSON:', err);
-            }
-
-            if (response.ok) {
-                // On success, let's route them to /link-github
-                alert('Sign-up successful!');
-                navigate('/link-github'); // <== changed from /tutorial
+            const data: ApiResponse = await res.json().catch(() => ({}));
+            if (res.ok) {
+                alert('Sign‑up successful!');
+                navigate('/link-github');
                 handleCloseSignUp();
-            } else {
-                const msg = data.message || 'Unknown error';
-                alert(`Sign-up failed: ${msg}`);
-            }
-        } catch (error) {
-            console.error('Sign-up error:', error);
-            alert('Server error. Please try again.');
+            } else alert(`Sign‑up failed: ${data.message || 'Unknown error'}`);
+        } catch (e) {
+            console.error(e);
+            alert('Server error');
         }
     };
 
-    // LOGIN
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: loginUsername, password: loginPassword }),
             });
-
-            // Log the response status and text
-            console.log('Login response status:', response.status);
-            const responseText = await response.text();
-            console.log('Login response text:', responseText);
-
-            let data: ApiResponse = {};
-            try {
-                data = JSON.parse(responseText);
-                console.log('Login response data:', data); // Add this line for debugging
-            } catch (jsonErr) {
-                console.error('Error reading JSON:', jsonErr);
-                alert('Server error. Please try again.');
-                return;
-            }
-
-            if (response.ok) {
-                const { token, username } = data;
-                if (!token || !username) {
-                    alert('Login failed: no token or username returned by server.');
-                    return;
-                }
-                localStorage.setItem('myAppToken', token);
-                setLoggedInUser(username);
+            const txt = await res.text();
+            const data: ApiResponse = JSON.parse(txt);
+            if (res.ok && data.token && data.username) {
+                localStorage.setItem('myAppToken', data.token);
+                setLoggedInUser(data.username);
                 alert('Logged in successfully!');
                 handleCloseLogin();
                 navigate('/link-github');
-            } else {
-                const msg = data.message || 'Unknown error';
-                alert(`Login failed: ${msg}`);
-            }
-        } catch (error) {
-            console.error('Login error:', error);
-            alert('Server error. Please try again.');
+            } else alert(`Login failed: ${data.message || 'Unknown error'}`);
+        } catch (e) {
+            console.error(e);
+            alert('Server error');
         }
     };
 
-    // LOG OUT
+    /* =====================================================
+       Navbar & menu helpers
+    ===================================================== */
+    const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+    const handleMenuClick = (path: string) => {
+        navigate(path);
+        setIsMenuOpen(false);
+    };
     const handleLogout = () => {
         localStorage.removeItem('myAppToken');
         setLoggedInUser(null);
         setIsMenuOpen(false);
     };
 
-    // Nav menu toggles
-    const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-    const handleMenuItemClick = (path: string) => {
-        navigate(path);
-        setIsMenuOpen(false);
+    /* =====================================================
+       Modal toggles
+    ===================================================== */
+    const handleOpenSignUp = () => { setIsSignUpOpen(true); setIsLoginOpen(false); };
+    const handleCloseSignUp = () => {
+        setIsSignUpOpen(false);
+        setEmail(''); setUsername(''); setPassword(''); setConfirmPassword(''); setRememberMe(false);
+        setEmailError(''); setUsernameError(''); setPasswordError(''); setConfirmPasswordError('');
+        setHasMinLength(false); setHasUppercase(false); setHasNumber(false); setHasSpecialChar(false);
     };
-    const handleOverlayClick = () => setIsMenuOpen(false);
-    const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+    const handleOpenLogin = () => { setIsLoginOpen(true); setIsSignUpOpen(false); };
+    const handleCloseLogin = () => { setIsLoginOpen(false); setLoginUsername(''); setLoginPassword(''); };
 
+    /* =====================================================
+       Recently‑edited open helper
+    ===================================================== */
+    const openDocument = (doc: DocBrief) => {
+        if (!doc.repo_full_name) return alert('Document has no linked repo');
+        const ghToken = localStorage.getItem('ghToken') || '';
+        navigate(`/document-page?repo=${encodeURIComponent(doc.repo_full_name)}&token=${ghToken}&branch=${doc.branch_name || 'main'}`);
+    };
+
+    /* =====================================================
+       Render
+    ===================================================== */
     return (
         <div className="landing-page">
-            {/* Header / Navigation */}
+            {/* ---------- Navbar ---------- */}
             <header className="navbar">
-                <div className="nav-left">
-                    <h1 className="brand">echo</h1>
-                </div>
+                <div className="nav-left"><h1 className="brand">echo</h1></div>
                 <div className="nav-right">
                     {loggedInUser ? (
-                        <nav className="nav-container">
-                            <div className="burger-icon" onClick={toggleMenu}>
-                                <FiMenu size={24} />
-                            </div>
-                        </nav>
+                        <div className="nav-container">
+                            <div className="burger-icon" onClick={toggleMenu}><FiMenu size={24}/></div>
+                        </div>
                     ) : (
                         <>
-                            <button className="nav-btn" onClick={handleOpenLogin}>
-                                Log In
-                            </button>
-                            <button className="nav-btn signup-btn" onClick={handleOpenSignUp}>
-                                Sign Up
-                            </button>
+                            <button className="nav-btn" onClick={handleOpenLogin}>Log In</button>
+                            <button className="nav-btn signup-btn" onClick={handleOpenSignUp}>Sign Up</button>
                         </>
                     )}
                 </div>
             </header>
 
+            {/* ---------- Fly‑out menu ---------- */}
             {loggedInUser && isMenuOpen && (
-                <div className="menu-overlay" onClick={handleOverlayClick}>
-                    <div className="nav-items" onClick={stopPropagation}>
-                        <div
-                            className="nav-item"
-                            onClick={() => handleMenuItemClick('/dashboard')}
-                        >
-                            Dashboard
-                        </div>
-                        <div
-                            className="nav-item"
-                            onClick={() => handleMenuItemClick('/document-page')}
-                        >
-                            My Documents
-                        </div>
-
-                        <div
-                            className="nav-item"
-                            onClick={() => handleMenuItemClick('/faq')}
-                        >
-                            FAQ
-                        </div>
-                        <div className="nav-item" onClick={handleLogout}>
-                            Logout
-                        </div>
+                <div className="menu-overlay" onClick={() => setIsMenuOpen(false)}>
+                    <div className="nav-items" onClick={e => e.stopPropagation()}>
+                        <div className="nav-item" onClick={() => handleMenuClick('/dashboard')}>Dashboard</div>
+                        <div className="nav-item" onClick={() => handleMenuClick('/link-github')}>Link GitHub</div>
+                        <div className="nav-item" onClick={() => handleMenuClick('/faq')}>FAQ</div>
+                        <div className="nav-item" onClick={handleLogout}>Logout</div>
                     </div>
                 </div>
             )}
 
-            {/* Hero Section */}
+            {/* ---------- Hero ---------- */}
             <section className="hero">
                 <div className="hero-content">
-                    <h2 className="hero-title">
-                        Ever <span className="text-red">suffered</span> with{' '}
-                        <span className="text-teal">code documentation?</span>
-                    </h2>
-                    <p className="hero-subtitle">
-                        Give it another <span className="text-green">chance</span> with{' '}
-                        <span className="text-teal">echo</span>
-                    </p>
-                    <button className="cta-btn">Try now</button>
+                    <h2 className="hero-title">Ever <span className="text-red">suffered</span> with <span className="text-teal">code documentation?</span></h2>
+                    <p className="hero-subtitle">Give it another <span className="text-green">chance</span> with <span className="text-teal">echo</span></p>
+                    <button className="cta-btn" onClick={() => navigate('/link-github')}>Try now</button>
                 </div>
             </section>
 
-            {/* Info / Feature Section */}
+            {/* ---------- Recently edited ---------- */}
+            {loggedInUser && recentDocs.length > 0 && (
+                <section className="recent-section">
+                    <h3>Your recently edited manuals</h3>
+                    <ul className="recent-list">
+                        {recentDocs.map(d => (
+                            <li key={d.id} className="recent-item">
+                                <button className="recent-link" onClick={() => openDocument(d)}>
+                                    {d.title} <span className="recent-repo">({d.repo_full_name})</span>
+                                </button>
+                                <time className="recent-date">{new Date(d.updated_at).toLocaleString()}</time>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            {/* ---------- Info / Features ---------- */}
             <section className="info-section">
                 <div className="code-tree-container">
-                    <pre className="code-tree">
-{`Project
+          <pre className="code-tree">{`Project
 ├── fe
 │   └── src
 ├── be
@@ -362,238 +295,92 @@ function App() {
 │          └── ColorPalette.css
 ├── DB
 │   └── init.sql
-└── docker-compose.yml
-`}
-                    </pre>
+└── docker-compose.yml`}</pre>
                 </div>
                 <div className="info-text">
-                    <h3>
-                        Create manuals that use <span className="text-teal">code sectioning</span>.
-                        Document only the idea of selected parts
-                        <span className="asterisk">*</span>
-                    </h3>
-                    <p className="note">
-                        <span className="asterisk">*</span> Code documentation and{' '}
-                        <span className="api-color">API</span> get their own special treatment
-                    </p>
+                    <h3>Create manuals that use <span className="text-teal">code sectioning</span>. Document only the idea of selected parts<span className="asterisk">*</span></h3>
+                    <p className="note"><span className="asterisk">*</span> Code documentation and <span className="api-color">API</span> get their own special treatment</p>
                 </div>
             </section>
 
-            {/* SIGN-UP MODAL */}
+            {/* ---------- Modals ---------- */}
+            {/* Sign‑Up Modal */}
             {isSignUpOpen && (
                 <div className="modal-overlay" onClick={handleCloseSignUp}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <button className="close-btn" onClick={handleCloseSignUp}>
-                            ×
-                        </button>
-
-                        <div className="thank-you-section">
-                            <p className="thank-you-text">Thank You for Thinking of Us &lt;3</p>
-                        </div>
-
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="close-btn" onClick={handleCloseSignUp}>×</button>
+                        <div className="thank-you-section"><p className="thank-you-text">Thank You for Thinking of Us &lt;3</p></div>
+                        {/* Sign‑up form */}
                         <form onSubmit={handleSignUpSubmit} className="signup-form">
-                            {/* Username */}
-                            <label htmlFor="username" className="signup-label">
-                                Username <span className="required-asterisk">*</span>
-                            </label>
-                            <input
-                                id="username"
-                                type="text"
-                                placeholder="Your username"
-                                value={username}
-                                required
-                                onBlur={(e) => validateUsername(e.target.value)}
-                                onChange={(e) => validateUsername(e.target.value)}
-                                className="signup-input"
-                            />
+                            {/* username */}
+                            <label htmlFor="username" className="signup-label">Username <span className="required-asterisk">*</span></label>
+                            <input id="username" value={username} onChange={e => validateUsername(e.target.value)} onBlur={e => validateUsername(e.target.value)} required className="signup-input"/>
                             {usernameError && <p className="error-text">{usernameError}</p>}
-
-                            {/* Email */}
-                            <label htmlFor="email" className="signup-label">
-                                Email <span className="required-asterisk">*</span>
-                            </label>
-                            <input
-                                id="email"
-                                type="email"
-                                placeholder="example@example.com"
-                                value={email}
-                                required
-                                onBlur={(e) => validateEmail(e.target.value)}
-                                onChange={(e) => validateEmail(e.target.value)}
-                                className="signup-input"
-                            />
+                            {/* email */}
+                            <label htmlFor="email" className="signup-label">Email <span className="required-asterisk">*</span></label>
+                            <input id="email" type="email" value={email} onChange={e => validateEmail(e.target.value)} onBlur={e => validateEmail(e.target.value)} required className="signup-input"/>
                             {emailError && <p className="error-text">{emailError}</p>}
-
-                            {/* Password */}
-                            <label htmlFor="password" className="signup-label">
-                                Password <span className="required-asterisk">*</span>
-                            </label>
-                            <input
-                                id="password"
-                                type="password"
-                                value={password}
-                                required
-                                onChange={(e) => handlePasswordChange(e.target.value)}
-                                className="signup-input"
-                            />
+                            {/* password */}
+                            <label htmlFor="password" className="signup-label">Password <span className="required-asterisk">*</span></label>
+                            <input id="password" type="password" value={password} onChange={e => handlePasswordChange(e.target.value)} required className="signup-input"/>
                             {passwordError && <p className="error-text">{passwordError}</p>}
-
-                            {/* Confirm Password */}
-                            <label htmlFor="confirmPassword" className="signup-label">
-                                Confirm Password <span className="required-asterisk">*</span>
-                            </label>
-                            <input
-                                id="confirmPassword"
-                                type="password"
-                                value={confirmPassword}
-                                required
-                                onBlur={(e) => handleConfirmPassword(e.target.value)}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="signup-input"
-                            />
-                            {confirmPasswordError && (
-                                <p className="error-text">{confirmPasswordError}</p>
-                            )}
-
-                            {/* Remember check */}
+                            {/* confirm */}
+                            <label htmlFor="confirm" className="signup-label">Confirm Password <span className="required-asterisk">*</span></label>
+                            <input id="confirm" type="password" value={confirmPassword} onChange={e => handleConfirmPassword(e.target.value)} onBlur={e => handleConfirmPassword(e.target.value)} required className="signup-input"/>
+                            {confirmPasswordError && <p className="error-text">{confirmPasswordError}</p>}
+                            {/* remember */}
                             <div className="remember-me-container">
-                                <input
-                                    type="checkbox"
-                                    id="rememberMe"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                    className="remember-me-checkbox"
-                                />
-                                <label htmlFor="rememberMe" className="remember-me-label">
-                                    Remember password
-                                </label>
+                                <input type="checkbox" id="rememberMe" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="remember-me-checkbox"/>
+                                <label htmlFor="rememberMe" className="remember-me-label">Remember password</label>
                             </div>
-
-                            {/* Social sign-in */}
+                            {/* social */}
                             <div className="social-signin-container">
-                                <button
-                                    type="button"
-                                    className="social-btn google"
-                                    onClick={handleGoogleSignIn}
-                                >
-                                    <FaGoogle size={18} style={{ marginRight: '8px' }} />
+                                <button type="button" className="social-btn google" onClick={handleGoogleSignIn}><FaGoogle size={18} style={{ marginRight: 8 }}/>
                                     Sign in with Google
                                 </button>
-                                <button
-                                    type="button"
-                                    className="social-btn github"
-                                    onClick={handleGithubSignIn}
-                                >
-                                    <FaGithub size={18} style={{ marginRight: '8px' }} />
+                                <button type="button" className="social-btn github" onClick={handleGithubSignIn}><FaGithub size={18} style={{ marginRight: 8 }}/>
                                     Sign in with GitHub
                                 </button>
                             </div>
-
-                            {/* Password Criteria */}
+                            {/* criteria */}
                             <div className="password-criteria">
                                 <p className="criteria-title">Password Criteria:</p>
-                                <div className="criteria-item">
-                                    <input
-                                        type="checkbox"
-                                        readOnly
-                                        checked={hasMinLength}
-                                        className="criteria-checkbox"
-                                        id="minLengthCheck"
-                                    />
-                                    <label htmlFor="minLengthCheck" className="criteria-label">
-                                        At least 8 characters
-                                    </label>
-                                </div>
-                                <div className="criteria-item">
-                                    <input
-                                        type="checkbox"
-                                        readOnly
-                                        checked={hasUppercase}
-                                        className="criteria-checkbox"
-                                        id="uppercaseCheck"
-                                    />
-                                    <label htmlFor="uppercaseCheck" className="criteria-label">
-                                        At least 1 uppercase letter
-                                    </label>
-                                </div>
-                                <div className="criteria-item">
-                                    <input
-                                        type="checkbox"
-                                        readOnly
-                                        checked={hasNumber}
-                                        className="criteria-checkbox"
-                                        id="numberCheck"
-                                    />
-                                    <label htmlFor="numberCheck" className="criteria-label">
-                                        At least 1 number
-                                    </label>
-                                </div>
-                                <div className="criteria-item">
-                                    <input
-                                        type="checkbox"
-                                        readOnly
-                                        checked={hasSpecialChar}
-                                        className="criteria-checkbox"
-                                        id="specialCheck"
-                                    />
-                                    <label htmlFor="specialCheck" className="criteria-label">
-                                        At least 1 special character
-                                    </label>
-                                </div>
+                                {[
+                                    { label: 'At least 8 characters', flag: hasMinLength, id: 'len' },
+                                    { label: 'At least 1 uppercase letter', flag: hasUppercase, id: 'upper' },
+                                    { label: 'At least 1 number', flag: hasNumber, id: 'num' },
+                                    { label: 'At least 1 special character', flag: hasSpecialChar, id: 'spec' },
+                                ].map(c => (
+                                    <div className="criteria-item" key={c.id}>
+                                        <input type="checkbox" readOnly checked={c.flag} className="criteria-checkbox" id={`crit_${c.id}`}/>
+                                        <label htmlFor={`crit_${c.id}`} className="criteria-label">{c.label}</label>
+                                    </div>
+                                ))}
                             </div>
-
-                            <button type="submit" className="cta-btn submit-btn">
-                                Start Documenting
-                            </button>
+                            <button type="submit" className="cta-btn submit-btn">Start Documenting</button>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* LOGIN MODAL */}
+            {/* Login Modal */}
             {isLoginOpen && (
                 <div className="modal-overlay" onClick={handleCloseLogin}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <button className="close-btn" onClick={handleCloseLogin}>
-                            ×
-                        </button>
-                        <div className="thank-you-section">
-                            <p className="thank-you-text">Welcome Back!</p>
-                        </div>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <button className="close-btn" onClick={handleCloseLogin}>×</button>
+                        <div className="thank-you-section"><p className="thank-you-text">Welcome Back!</p></div>
                         <form onSubmit={handleLoginSubmit} className="login-form">
-                            <label htmlFor="loginUsername" className="login-label">
-                                Username <span className="required-asterisk">*</span>
-                            </label>
-                            <input
-                                id="loginUsername"
-                                type="text"
-                                placeholder="Your username"
-                                value={loginUsername}
-                                required
-                                onChange={(e) => setLoginUsername(e.target.value)}
-                                className="login-input"
-                            />
-                            <label htmlFor="loginPassword" className="login-label">
-                                Password <span className="required-asterisk">*</span>
-                            </label>
-                            <input
-                                id="loginPassword"
-                                type="password"
-                                placeholder="Your password"
-                                value={loginPassword}
-                                required
-                                onChange={(e) => setLoginPassword(e.target.value)}
-                                className="login-input"
-                            />
-                            <button type="submit" className="cta-btn submit-btn">
-                                Log In
-                            </button>
+                            <label htmlFor="loginUsername" className="login-label">Username <span className="required-asterisk">*</span></label>
+                            <input id="loginUsername" value={loginUsername} onChange={e => setLoginUsername(e.target.value)} required className="login-input"/>
+                            <label htmlFor="loginPassword" className="login-label">Password <span className="required-asterisk">*</span></label>
+                            <input id="loginPassword" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required className="login-input"/>
+                            <button type="submit" className="cta-btn submit-btn">Log In</button>
                         </form>
                     </div>
                 </div>
             )}
         </div>
     );
-}
+};
 
 export default App;

@@ -1,103 +1,91 @@
+/* =========================================================
+   MyDocuments.tsx        (dashboard of saved manuals)
+   Shows each document as a card with “Continue editing”
+========================================================= */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './CSS/Documents.css';
+import { FaUserCircle } from 'react-icons/fa';
+import './CSS/mydocuments.css';            // card styles
+import '../global-css/navbar-signedin.css'; // signed-in navbar
 
-interface JwtPayload {
-    username?: string;
-    // add any other fields your JWT might have
-}
-
-function parseJwt(token: string): JwtPayload | null {
-    try {
-        const base64Payload = token.split('.')[1];
-        const payload = atob(base64Payload);
-        return JSON.parse(payload);
-    } catch (e) {
-        console.error('Failed to parse token', e);
-        return null;
-    }
-}
-
-// We'll assume your server returns an array of documents like:
-// [ { id: 123, repoFullName: "MiguellbrahimE/echo" }, ... ]
-interface DocumentData {
+interface Doc {
     id: number;
-    repoFullName: string;
+    title: string;
+    repo_full_name: string | null;
+    branch_name: string | null;
+    updated_at: string;
 }
 
 const MyDocuments: React.FC = () => {
-    const navigate = useNavigate();
-    const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
-    const [documents, setDocuments] = useState<DocumentData[]>([]);
+    const nav = useNavigate();
+    const [docs, setDocs] = useState<Doc[]>([]);
 
+    /* fetch docs on mount */
     useEffect(() => {
-        const token = localStorage.getItem('myAppToken');
-        if (!token) {
-            navigate('/login');
-            return;
-        }
-
-        const decoded = parseJwt(token);
-        if (!decoded || !decoded.username) {
-            // token invalid or no username
-            navigate('/login');
-            return;
-        }
-
-        setLoggedInUser(decoded.username);
-
-        // Next, fetch documents from the server
-        fetchDocuments(token);
-    }, [navigate]);
-
-    const fetchDocuments = async (token: string) => {
-        try {
-            const res = await fetch('http://localhost:5001/api/documents', {
-                method: 'GET',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-            if (!res.ok) {
-                throw new Error('Failed to fetch docs');
+        (async () => {
+            const jwt = localStorage.getItem('myAppToken');
+            if (!jwt) return;
+            try {
+                const res = await fetch(
+                    `${import.meta.env.VITE_API_BASE_URL}/documents`,
+                    { headers: { Authorization: `Bearer ${jwt}` } }
+                );
+                if (res.ok) setDocs(await res.json());
+            } catch (e) {
+                console.error('Error loading documents', e);
             }
-            const data: DocumentData[] = await res.json();
-            setDocuments(data);
-        } catch (err) {
-            console.error('Error fetching documents:', err);
+        })();
+    }, []);
+
+    /* open editor */
+    const openDoc = (d: Doc) => {
+        const ghToken = localStorage.getItem('ghToken') || '';
+        if (!d.repo_full_name) {
+            return alert('Document has no linked repository.');
         }
+        nav(
+            `/document-page?repo=${encodeURIComponent(d.repo_full_name)}&token=${ghToken}&branch=${d.branch_name || 'main'}`
+        );
     };
-
-    const handleCreateNew = () => {
-        alert('Create a new document here!');
-    };
-
-    // If we want to handle opening an existing doc, we could do:
-    const openDocument = (docId: number) => {
-        // e.g., navigate to /document-page?docId=docId
-        navigate(`/document-page?docId=${docId}`);
-    };
-
-    if (!loggedInUser) return null; // Or a spinner/loading
 
     return (
-        <div className="documents-page">
-            <h2 className="documents-title">My Documents</h2>
-            <div className="documents-grid">
-                {documents.map((doc) => (
-                    <div
-                        key={doc.id}
-                        className="document-card"
-                        onClick={() => openDocument(doc.id)}
-                    >
-                        {doc.repoFullName}
-                    </div>
-                ))}
-                <div className="document-card create-new" onClick={handleCreateNew}>
-                    + Create More
+        <>
+            {/* Signed-in navbar (avatar only) */}
+            <nav className="navbar-signedin">
+                <a href="/" className="brand">echo</a>
+                <div className="nav-right">
+                    <FaUserCircle size={26} />
                 </div>
-            </div>
-        </div>
+            </nav>
+
+            <main className="dashboard-container">
+                <h2 className="dash-title">My Manuals</h2>
+
+                {docs.length === 0 ? (
+                    <p className="empty-text">No documents yet – create one from the editor.</p>
+                ) : (
+                    <div className="card-grid">
+                        {docs.map((d) => (
+                            <div key={d.id} className="doc-card">
+                                <h3 className="doc-title">{d.title}</h3>
+                                {d.repo_full_name && (
+                                    <p className="repo-name">{d.repo_full_name}</p>
+                                )}
+                                <p className="updated-at">
+                                    Last edited: {new Date(d.updated_at).toLocaleString()}
+                                </p>
+                                <button
+                                    className="continue-btn"
+                                    onClick={() => openDoc(d)}
+                                >
+                                    Continue Editing
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </main>
+        </>
     );
 };
 

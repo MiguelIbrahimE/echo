@@ -1,6 +1,10 @@
 /* ==========================================
-   LinkGithubRepo.tsx
-   ========================================== */
+   LinkGithubRepo.tsx              ✨ 2025-05-01
+   • Lets the user choose a repo
+   • Saves that repo for the user  (POST /repositories)
+   • Creates an empty document     (POST /documents)
+   • Then routes straight into the editor
+========================================== */
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import "./CSS/repolinking.css";
@@ -8,101 +12,153 @@ import "../global-css/navbar.css";
 
 interface Repo {
     id: number;
-    full_name: string;
-    html_url: string;
+    full_name: string;   // e.g. "octocat/hello-world"
+    default_branch: string;
 }
 
 const LinkGithubRepo: React.FC = () => {
-    const [token, setToken] = useState<string | null>(null);
-    const [repos, setRepos] = useState<Repo[]>([]);
+    const [token, setToken]   = useState<string | null>(null);
+    const [repos, setRepos]   = useState<Repo[]>([]);
     const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
 
     const location = useLocation();
     const navigate = useNavigate();
 
+    /* ------------------------------------------
+       Read PAT from ?token= or localStorage
+    ------------------------------------------ */
     useEffect(() => {
-        const urlParams = new URLSearchParams(location.search);
-        const accessToken = urlParams.get('token');
-        if (accessToken) {
-            setToken(accessToken);
-            fetchRepositories(accessToken);
+        const q = new URLSearchParams(location.search);
+        const t = q.get("token") || localStorage.getItem("ghToken");
+        if (t) {
+            setToken(t);
+            localStorage.setItem("ghToken", t);
+            fetchRepositories(t);
         }
     }, [location.search]);
 
-    /** If user isn’t linked to GitHub yet, direct to your OAuth route. */
-    const handleGithubSignIn = () => {
-        // For example, you might have a route on your Node server for GH auth
-        window.location.href = 'http://localhost:5001/auth/github';
-    };
-
-    /** Fetch user’s repos from GitHub using the token. */
-    const fetchRepositories = async (accessToken: string) => {
+    /* ------------------------------------------
+       GitHub API call
+    ------------------------------------------ */
+    async function fetchRepositories(accessToken: string) {
         try {
-            const response = await fetch('https://api.github.com/user/repos?per_page=100', {
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                },
-            });
-            if (!response.ok) {
-                throw new Error('Unable to fetch GitHub repos');
-            }
-            const data: Repo[] = await response.json();
-            setRepos(data);
-        } catch (error) {
-            console.error('Error fetching repositories:', error);
+            const res = await fetch(
+                "https://api.github.com/user/repos?per_page=100",
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            if (!res.ok) throw new Error("GitHub API error");
+            setRepos(await res.json());
+        } catch (e) {
+            console.error(e);
+            alert("Could not load repositories");
         }
+    }
+
+    /* ------------------------------------------
+       When a repo is chosen
+    ------------------------------------------ */
+    const handleRepoSelect = async (repoFull: string, defaultBranch = "main") => {
+        setSelectedRepo(repoFull);
+
+        const jwt = localStorage.getItem("myAppToken") || "";
+        if (!jwt) {
+            alert("You must be logged in first.");
+            return;
+        }
+
+        /* 1 ▸ save / update repo for this user ---------------- */
+        try {
+            await fetch(`${import.meta.env.VITE_API_BASE_URL}/repositories`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${jwt}`,
+                },
+                body: JSON.stringify({
+                    repoFullName: repoFull,
+                    githubToken: token,
+                }),
+            });
+        } catch (e) {
+            console.warn("Repo save failed (continuing)…", e);
+        }
+
+        /* 2 ▸ create (or retrieve existing) blank manual ------- */
+        try {
+            const title   = `Manual – ${repoFull.split("/")[1]}`;
+            const docRes  = await fetch(
+                `${import.meta.env.VITE_API_BASE_URL}/documents`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${jwt}`,
+                    },
+                    body: JSON.stringify({
+                        title,
+                        content: "",
+                        repoFullName: repoFull,
+                        branchName : defaultBranch,
+                    }),
+                }
+            );
+            if (!docRes.ok) {
+                const txt = await docRes.text();
+                console.warn("Doc create failed:", txt);
+            }
+        } catch (e) {
+            console.error("Error creating document:", e);
+        }
+
+        /* 3 ▸ jump into editor ------------------------------- */
+        navigate(
+            `/document-page?repo=${encodeURIComponent(repoFull)}&token=${token || ""}&branch=${defaultBranch}`
+        );
     };
 
-    /** When user selects a repo, redirect to the Document page. */
-    const handleRepoSelect = async (repoFullName: string) => {
-        setSelectedRepo(repoFullName);
-        alert(`You have linked to the repository: ${repoFullName}`);
-
-        // Pass the token + repo via the URL to DocumentPage
-        navigate(`/document-page?repo=${encodeURIComponent(repoFullName)}&token=${token || ''}`);
+    /* ------------------------------------------
+       Start OAuth flow
+    ------------------------------------------ */
+    const handleGithubSignIn = () => {
+        window.location.href = "http://localhost:5001/auth/github";
     };
 
-    /** If brand is clicked, go home */
-    const handleBrandClick = () => {
-        navigate('/');
-    };
-
+    /* ------------------------------------------
+       Render
+    ------------------------------------------ */
     return (
-        <div className="bg-light" style={{ minHeight: '100vh' }}>
+        <div className="bg-light" style={{ minHeight: "100vh" }}>
             <nav className="navbar">
-                <h1 className="brand" onClick={handleBrandClick}>
-                    echo
-                </h1>
+                <h1 className="brand" onClick={() => navigate("/")}>echo</h1>
             </nav>
 
             <div className="main-container">
                 <div className="github-card">
-                    {/* If no token, show “Link GitHub” button */}
                     {!token ? (
                         <button className="github-signin-btn" onClick={handleGithubSignIn}>
                             <span className="btn-text">Link Up Your GitHub</span>
                         </button>
                     ) : (
-                        <div>
-                            <h3>Please Select a Repository:</h3>
+                        <>
+                            <h3>Select a Repository:</h3>
                             <ul className="repo-list">
-                                {repos.map((repo) => (
-                                    <li key={repo.id}>
+                                {repos.map((r) => (
+                                    <li key={r.id}>
                                         <button
                                             className="repo-btn"
-                                            onClick={() => handleRepoSelect(repo.full_name)}
+                                            onClick={() => handleRepoSelect(r.full_name, r.default_branch)}
                                         >
-                                            {repo.full_name}
+                                            {r.full_name}
                                         </button>
                                     </li>
                                 ))}
                             </ul>
                             {selectedRepo && (
                                 <p className="selected-repo">
-                                    You selected: <strong>{selectedRepo}</strong>
+                                    Selected: <strong>{selectedRepo}</strong>
                                 </p>
                             )}
-                        </div>
+                        </>
                     )}
                 </div>
             </div>

@@ -2,6 +2,7 @@ import express from 'express';
 import cors    from 'cors';
 import dotenv  from 'dotenv';
 dotenv.config();
+import repositoriesRouter from './routes/repositoriesRouter';
 
 import authRouter          from './auth/authRouter';
 import documentsRouter     from './routes/documentsRouter';
@@ -13,7 +14,7 @@ const PORT = process.env.PORT || 5001;
 
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
-
+app.use('/repositories', repositoriesRouter);
 app.use('/auth',       authRouter);
 app.use('/documents',  documentsRouter);
 app.use('/github',     githubAuthRouter);

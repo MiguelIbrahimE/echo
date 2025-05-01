@@ -1,28 +1,33 @@
-import { createBrowserRouter } from "react-router-dom";
-import App from "./App";
-import LinkGithubRepo from "./SignedUp/LinkGithubRepo";
-import DocumentPage from "./SignedUp/DocumentPage";
-import MyDocuments from "./SignedUp/MyDocuments";
-import MyErrorBoundary from "./MyErrorBoundary";
+import { createBrowserRouter } from 'react-router-dom';
+import App from './App';
+import LinkGithubRepo from './SignedUp/LinkGithubRepo';
+import DocumentPage from './SignedUp/DocumentPage';
+import MyDocuments from './SignedUp/MyDocuments';
+import MyErrorBoundary from './MyErrorBoundary';
 
 const router = createBrowserRouter([
     {
-        path: "/",
+        path: '/',
         element: <App />,
         errorElement: <MyErrorBoundary />,
     },
     {
-        path: "/link-github",
+        path: '/link-github',
         element: <LinkGithubRepo />,
     },
     {
-        // The user’s main doc editor page
-        path: "/document-page",
+        /* main doc editor */
+        path: '/document-page',
         element: <DocumentPage />,
     },
     {
-        // The “My Documents” page that shows previously saved docs
-        path: "/documents",
+        /* dashboard */
+        path: '/dashboard',
+        element: <MyDocuments />,
+    },
+    {
+        /* alias – keeps old /documents URL working */
+        path: '/documents',
         element: <MyDocuments />,
     },
 ]);

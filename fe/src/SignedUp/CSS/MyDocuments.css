@@ -1,0 +1,76 @@
+/* =========================================================
+   mydocuments.css  –  dashboard card styles
+========================================================= */
+.dashboard-container {
+    max-width: 1100px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.dash-title {
+    margin-bottom: 1.5rem;
+    font-size: 1.75rem;
+    font-weight: 600;
+}
+
+.empty-text {
+    color: #666;
+    text-align: center;
+}
+
+.card-grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+.doc-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.doc-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.doc-title {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.repo-name {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9rem;
+    color: #0d9488; /* teal-600 */
+}
+
+.updated-at {
+    margin-top: auto;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.continue-btn {
+    margin-top: 0.75rem;
+    background: #0d9488;          /* teal-600 */
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.15s ease;
+}
+
+.continue-btn:hover {
+    background: #0f766e;          /* teal-700 */
+}
