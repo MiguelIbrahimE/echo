@@ -1,301 +1,230 @@
-/* Landing page container */
-.landing-page {
-  font-family: 'Arial', sans-serif;
-  color: #333;
+/* =========================================================
+   App.css  –  Landing / Auth / Recent Docs
+   (2025-05-01)
+========================================================= */
+
+/* ---------- Global ---------- */
+:root {
+  --brand-teal: #0EB8BE;
+  --brand-red:  #EE3838;
+  --brand-green:#3A9B3A;
+  --gray-100:   #f3f4f6;
+  --gray-200:   #e5e7eb;
+  --gray-700:   #374151;
+}
+
+body, html {
   margin: 0;
   padding: 0;
-  background-color: #fefefe;
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  color: #333;
+  background: #fff;
 }
 
-/* Hero Section */
+a { text-decoration: none; color: inherit; }
+
+/* ---------- Navbar ---------- */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.9rem 1.5rem;
+  border-bottom: 1px solid var(--gray-200);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #fff;
+}
+
+.brand { font-size: 1.6rem; font-weight: 700; }
+
+/* ---------- Hero ---------- */
 .hero {
+  min-height: 60vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 60vh;
-  background: #fafafa;
   text-align: center;
-  border-bottom: 1px solid #ccc;
+  background: radial-gradient(circle at 20% 20%, #f0fdff 0%, #fff 40%);
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--gray-200);
 }
-.hero-content {
-  max-width: 600px;
+
+.hero-title  { font-size: 2.25rem; line-height: 1.3; margin-bottom: 0.6rem; }
+.hero-subtitle { font-size: 1.25rem; margin-bottom: 1.6rem; }
+.cta-btn {
+  background: #000;
+  color: #fff;
+  padding: 0.9rem 1.4rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+.cta-btn:hover { background: #222; }
+
+.text-red   { color: var(--brand-red); }
+.text-green { color: var(--brand-green); }
+.text-teal  { color: var(--brand-teal); }
+
+/* ---------- Recently Edited ---------- */
+.recent-section {
+  max-width: 900px;
+  margin: 2rem auto 3rem auto;
   padding: 0 1rem;
 }
-.hero-title {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
+.recent-section h3 {
+  font-size: 1.4rem;
+  margin-bottom: 0.9rem;
 }
-.hero-subtitle {
-  font-size: 1.2rem;
-  margin-bottom: 1.5rem;
+.recent-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
-.cta-btn {
-  background-color: #333;
-  color: #fff;
-  padding: 0.8rem 1.2rem;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-.cta-btn:hover {
-  background-color: #555;
-}
-
-/* Color classes */
-.text-red {
-  color: #EE3838;
-}
-.text-green {
-  color: #3A9B3A;
-}
-.text-teal {
-  color: #0EB8BE;
-}
-
-/* Asterisk and API color */
-.asterisk {
-  color: #B76319;
-}
-.api-color {
-  color: #F529E8;
-}
-
-/* Info Section */
-.info-section {
+.recent-item {
   display: flex;
-  flex-wrap: wrap;
-  padding: 2rem;
-  gap: 2rem;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  margin-bottom: 0.6rem;
+  transition: background 0.15s;
 }
-.code-tree-container {
-  flex: 1 1 300px;
-  max-width: 400px;
-  overflow: auto;
+.recent-item:hover { background: var(--gray-100); }
+.recent-link {
+  background: none;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.recent-repo { color: var(--brand-teal); }
+.recent-date {
+  font-size: 0.8rem;
+  color: var(--gray-700);
+}
+
+/* ---------- Info / Features ---------- */
+.info-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(320px,1fr));
+  gap: 2.2rem;
+  align-items: flex-start;
+  max-width: 1100px;
+  margin: 0 auto 4rem auto;
+  padding: 0 1.2rem;
 }
 .code-tree {
-  background-color: #2e2e2e;
-  color: #ccc;
-  padding: 1rem;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  line-height: 1.4;
+  background: #1e1e1e;
+  color: #e1e1e1;
+  padding: 1rem 1.2rem;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85rem;
 }
+.info-text h3 { font-size: 1.5rem; margin: 0 0 0.9rem 0; }
+.info-text p  { margin: 0 0 0.8rem 0; }
+.api-color    { color: #F529E8; }
+.asterisk     { color: #B76319; }
 
-.info-text {
-  flex: 1 1 300px;
-  max-width: 500px;
-  line-height: 1.6;
+/* ---------- Burger Menu ---------- */
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 40;
 }
-.info-text h3 {
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
+.nav-items {
+  position: absolute;
+  top: 5.2rem;
+  right: 1.2rem;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: 10px;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem 0;
+  box-shadow: 0 4px 14px rgba(0,0,0,.1);
 }
-.info-text p {
-  margin-bottom: 1rem;
+.nav-item {
+  padding: 0.75rem 1rem;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
 }
-.note {
-  font-size: 0.9rem;
-  color: #666;
-}
+.nav-item:hover { background: var(--brand-teal); color:#fff; }
 
-/* MODAL OVERLAY */
+/* ---------- Modals ---------- */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(0,0,0,.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 999;
+  z-index: 50;
 }
-
-/* MODAL CONTENT */
 .modal-content {
-  background-color: #ffffff !important;
+  background: #fff;
+  border-radius: 10px;
   padding: 2rem;
-  max-width: 400px;
-  width: 90%;
-  border-radius: 8px;
+  width: 92%;
+  max-width: 430px;
   position: relative;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 6px 18px rgba(0,0,0,.2);
 }
-
-/* CLOSE BUTTON (top-right 'X') */
 .close-btn {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
+  top: 0.55rem;
+  right: 0.55rem;
   background: transparent;
   border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
+  font-size: 1.7rem;
   line-height: 1;
+  cursor: pointer;
 }
 
-/* Thank You Section */
-.thank-you-section {
-  padding: 0.6rem;
-  border-radius: 4px;
-  margin-bottom: 0.6rem;
-  text-align: center;
-  background-color: #fff;
-}
-.thank-you-text {
-  margin: 0;
-  color: #0EB8BE;
-  font-size: 0.95rem;
+/* ---------- Forms ---------- */
+.signup-form,
+.login-form { display: flex; flex-direction: column; gap: 0.65rem; }
+
+.signup-input,
+.login-input,
+.key-input {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.92rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
 }
 
-/* Sign-up Form */
-.signup-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-.signup-label {
-  font-size: 0.85rem;
-  margin-bottom: 0.2rem;
-}
-.signup-input {
-  padding: 0.3rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  border: 1px solid #ccc;
-}
-.required-asterisk {
-  color: red;
-}
-.remember-me-container {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.remember-me-checkbox {
-  width: 0.9rem;
-  height: 0.9rem;
-}
-.remember-me-label {
-  margin: 0;
-  font-size: 0.8rem;
-}
+/* criteria list */
 .password-criteria {
-  margin-top: 0.4rem;
   font-size: 0.8rem;
+  margin-top: 0.3rem;
 }
-.criteria-title {
-  margin-bottom: 0.3rem;
-  font-weight: bold;
-}
-.criteria-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.2rem;
-}
-.criteria-checkbox {
-  width: 0.8rem;
-  height: 0.8rem;
-}
-.criteria-label {
-  margin-left: 0.3rem;
-  font-size: 0.85rem;
-}
+.criteria-item { display:flex; align-items:center; gap:0.35rem; }
 
-/* Error text under fields */
-.error-text {
-  color: red;
-  font-size: 0.75rem;
-  margin: 0;
-}
-
-/* Submit Button */
-.submit-btn {
-  background-color: black;
-  color: #fff;
-  font-size: 0.85rem;
-  padding: 0.5rem 1rem;
-  margin-top: 0.4rem;
+/* buttons */
+.submit-btn,
+.social-btn,
+.edit-btn,
+.save-btn,
+.cancel-btn {
   border: none;
-  border-radius: 4px;
-}
-
-/* Login Form (mirroring sign-up styles) */
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-.login-label {
-  font-size: 0.85rem;
-  margin-bottom: 0.2rem;
-}
-.login-input {
-  padding: 0.3rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  border: 1px solid #ccc;
-}
-
-/* Reuse .error-text for login errors too */
-
-/*========== Menu Overlay for Nav ==========*/
-/* covers entire screen so clicking outside menu closes it */
-.menu-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000; /* place above main content */
-}
-
-/*========== Nav Container (on the right) ==========*/
-.nav-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-right: 1rem; /* optional spacing to brand */
-}
-
-/* The burger icon (click to open/close menu) */
-.burger-icon {
   cursor: pointer;
-  padding: 0.5rem;
-  /* Adjust icon size in your TSX (e.g., <FiMenu size={24} />) */
+  border-radius: 6px;
+  transition: background .18s;
 }
+.submit-btn { background:#000; color:#fff; padding:0.55rem 1rem; }
+.social-btn.google {
+  background:#ea4335; color:#fff; padding:0.55rem 0.9rem;
+}
+.social-btn.github {
+  background:#333; color:#fff; padding:0.55rem 0.9rem;
+}
+.social-btn:hover { filter: brightness(1.08); }
 
-/*========== The Dropdown Menu Itself ==========*/
-/* We place this inside .menu-overlay if isMenuOpen is true. */
-.nav-items {
-  position: absolute;
-  top: 5.2rem; /* Enough to clear the icon */
-  right: 1rem; /* Align with right edge or 0 if flush to screen edge */
-  background-color: #fff;
-  border: 1px solid #ccc;
-  min-width: 180px;
-  z-index: 1001; /* above the .menu-overlay (z-index 1000) */
-  display: flex;
-  flex-direction: column;
-  padding: 0.5rem;
-}
-
-/* Each nav item in the dropdown */
-.nav-item {
-  padding: 0.6rem;
-  margin: 0.2rem 0;
-  cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-/* Hover effect for nav items */
-.nav-item:hover {
-  background-color: #0EB8BE;
-  color: #fff;
-}
+.error-text { color:#e11d48; font-size:0.78rem; }
