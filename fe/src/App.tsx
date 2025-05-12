@@ -352,7 +352,7 @@ const App: React.FC = () => {
             {loggedInUser && isMenuOpen && (
                 <div className="menu-overlay" onClick={() => setIsMenuOpen(false)} role="button" tabIndex={0} onKeyPress={(e) => e.key === 'Enter' && setIsMenuOpen(false)} >
                     <div className="nav-items" onClick={e => e.stopPropagation()} role="menu">
-                        <div className="nav-item" role="menuitem" tabIndex={0} onClick={() => handleMenuClick('/my-documents')} onKeyPress={(e) => e.key === 'Enter' && handleMenuClick('/my-documents')}>My Documents</div>
+                        <div className="nav-item" role="menuitem" tabIndex={0} onClick={() => handleMenuClick('/documents')} onKeyPress={(e) => e.key === 'Enter' && handleMenuClick('/documents')}>My Documents</div>
                         <div className="nav-item" role="menuitem" tabIndex={0} onClick={() => handleMenuClick('/link-github')} onKeyPress={(e) => e.key === 'Enter' && handleMenuClick('/link-github')}>Link GitHub</div>
                         <div className="nav-item" role="menuitem" tabIndex={0} onClick={() => handleMenuClick('/settings')} onKeyPress={(e) => e.key === 'Enter' && handleMenuClick('/settings')}>Settings</div>
                         <div className="nav-item" role="menuitem" tabIndex={0} onClick={handleLogout} onKeyPress={(e) => e.key === 'Enter' && handleLogout}>Logout</div>

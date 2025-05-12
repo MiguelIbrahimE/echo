@@ -4,8 +4,8 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../db'; // Your database connection pool
 
 // Import your generator services
-import { analyzeRepository as generateUserManual } from '../services/userManualGenerator'; // Renamed for clarity
-
+import { generateUserManual } from '../services/userManualGenerator'; // Assuming analyzeRepository is aliased or file renamed
+// import { generateApiReference } from '../services/apiReferenceGenerator'; // Remove if not used
 import { generateContributingGuide } from '../services/contributingGuideGenerator';
 import { explainProjectStructure } from '../services/projectStructureExplainer';
 
@@ -17,9 +17,8 @@ interface AuthenticatedRequest extends Request {
     user?: {
         id: number;
         username: string;
-        // Add other user properties if decoded from JWT, like email
     };
-    dbUser?: { // For attaching full user record from DB including github_access_token
+    dbUser?: {
         id: number;
         username: string;
         email?: string;
@@ -28,8 +27,8 @@ interface AuthenticatedRequest extends Request {
     }
 }
 
-// JWT Authentication Middleware + User & GitHub Token Fetcher
 async function authenticateAndLoadUser(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    // ... (implementation from your last message - looks good)
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ message: 'No token provided or malformed token.' });
@@ -38,9 +37,8 @@ async function authenticateAndLoadUser(req: AuthenticatedRequest, res: Response,
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET) as { id: number; username: string };
-        req.user = decoded; // Basic user info from JWT
+        req.user = decoded;
 
-        // Fetch full user details including github_access_token from DB
         const userResult = await pool.query(
             'SELECT id, username, email, github_id, github_access_token FROM users WHERE id = $1',
             [decoded.id]
@@ -49,9 +47,7 @@ async function authenticateAndLoadUser(req: AuthenticatedRequest, res: Response,
         if (userResult.rows.length === 0) {
             return res.status(401).json({ message: 'User not found for token.' });
         }
-        req.dbUser = userResult.rows[0]; // Attach full user record
-
-
+        req.dbUser = userResult.rows[0];
         return next();
     } catch (error) {
         if (error instanceof jwt.JsonWebTokenError) {
@@ -62,12 +58,7 @@ async function authenticateAndLoadUser(req: AuthenticatedRequest, res: Response,
     }
 }
 
-
-/* ---------- util: resolve repository_id ---------- */
-async function getRepositoryId(
-    userId: number,
-    repoFullName?: string | null
-): Promise<number | null> {
+async function getRepositoryId( /* ... as before ... */ userId: number, repoFullName?: string | null): Promise<number | null> {
     if (!repoFullName) return null;
     const { rows } = await pool.query(
         `SELECT id FROM user_repositories WHERE user_id = $1 AND repo_full_name = $2`,
@@ -77,18 +68,18 @@ async function getRepositoryId(
 }
 
 /* ==========================================================
-   STANDARD DOCUMENT CRUD (Authenticated with app's JWT)
+   STANDARD DOCUMENT CRUD
 ========================================================== */
-
+// ... (GET '/', GET '/recent', POST '/', PUT '/:id', DELETE '/:id' as in your last message - these look good)
 // List all documents for the authenticated user
 documentsRouter.get('/', authenticateAndLoadUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { rows } = await pool.query(
-            `SELECT id, title, doc_type, repo_full_name, branch_name, created_at, updated_at
+            `SELECT id, title, doc_type, repo_full_name, branch_name, created_at, updated_at, github_file_url, github_commit_url
              FROM documents
              WHERE owner_id = $1
-             ORDER BY updated_at DESC`,
-            [req.user!.id] // req.user is guaranteed by authenticateAndLoadUser
+             ORDER BY updated_at DESC`, // Added github_file_url, github_commit_url
+            [req.user!.id]
         );
         res.json(rows);
     } catch (e) {
@@ -101,11 +92,11 @@ documentsRouter.get('/', authenticateAndLoadUser, async (req: AuthenticatedReque
 documentsRouter.get('/recent', authenticateAndLoadUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { rows } = await pool.query(
-            `SELECT id, title, doc_type, repo_full_name, branch_name, updated_at
+            `SELECT id, title, doc_type, repo_full_name, branch_name, updated_at, github_file_url, github_commit_url
              FROM documents
              WHERE owner_id = $1
              ORDER BY updated_at DESC
-             LIMIT 10`,
+             LIMIT 10`, // Added github_file_url, github_commit_url
             [req.user!.id]
         );
         res.json(rows);
@@ -115,33 +106,26 @@ documentsRouter.get('/recent', authenticateAndLoadUser, async (req: Authenticate
     }
 });
 
-// Create a new document (e.g., manually, or after generation)
+// Create a new document (e.g., manually, or after generation if frontend posts generated content)
 documentsRouter.post('/', authenticateAndLoadUser, async (req: AuthenticatedRequest, res: Response) => {
-    const { title, content, repoFullName, branchName, docType } = req.body; // Added docType
+    const { title, content, repoFullName, branchName, docType, githubFileUrl, githubCommitUrl } = req.body;
     const ownerId = req.user!.id;
 
     if (!title) return res.status(400).json({ message: 'Title is required' });
-    if (!docType) return res.status(400).json({ message: 'docType is required (e.g., USER_MANUAL, API_REFERENCE)' });
-
+    if (!docType) return res.status(400).json({ message: 'docType is required' });
 
     try {
         const repositoryId = await getRepositoryId(ownerId, repoFullName);
-
         const result = await pool.query(
-            `INSERT INTO documents (owner_id, repository_id, title, content, repo_full_name, branch_name, doc_type)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING id, title, doc_type, repo_full_name, branch_name, created_at, updated_at`, // Return the created doc
+            `INSERT INTO documents (owner_id, repository_id, title, content, repo_full_name, branch_name, doc_type, github_file_url, github_commit_url)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             RETURNING id, title, doc_type, repo_full_name, branch_name, created_at, updated_at, github_file_url, github_commit_url`,
             [
-                ownerId,
-                repositoryId,
-                title,
-                content ?? '', // Default to empty string if content is not provided
-                repoFullName ?? null,
-                branchName ?? null,
-                docType.toUpperCase(), // Store doc_type in uppercase
+                ownerId, repositoryId, title, content ?? '', repoFullName ?? null,
+                branchName ?? null, docType.toUpperCase(), githubFileUrl ?? null, githubCommitUrl ?? null
             ]
         );
-        res.status(201).json(result.rows[0]); // Send back the created document
+        res.status(201).json(result.rows[0]);
     } catch (e) {
         console.error("Error creating document record:", e);
         res.status(500).json({ message: 'Error creating document' });
@@ -151,23 +135,27 @@ documentsRouter.post('/', authenticateAndLoadUser, async (req: AuthenticatedRequ
 // Update an existing document
 documentsRouter.put('/:id', authenticateAndLoadUser, async (req: AuthenticatedRequest, res: Response) => {
     const { id: docId } = req.params;
-    const { title, content, repoFullName, branchName, docType } = req.body;
+    const { title, content, repoFullName, branchName, docType, githubFileUrl, githubCommitUrl } = req.body;
     const ownerId = req.user!.id;
 
     try {
         const repositoryId = await getRepositoryId(ownerId, repoFullName);
-
         const { rowCount } = await pool.query(
             `UPDATE documents
              SET title = COALESCE($1, title),
                  content = COALESCE($2, content),
-                 repository_id = $3,        -- Allow updating to null or new repo_id
-                 repo_full_name = $4,   -- Allow updating to null or new repo_full_name
-                 branch_name = $5,      -- Allow updating to null or new branch_name
-                 doc_type = COALESCE($6, doc_type), -- Allow updating doc_type
+                 repository_id = $3,
+                 repo_full_name = $4,
+                 branch_name = $5,
+                 doc_type = COALESCE($6, doc_type),
+                 github_file_url = COALESCE($7, github_file_url),
+                 github_commit_url = COALESCE($8, github_commit_url),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $7 AND owner_id = $8`,
-            [title, content, repositoryId, repoFullName, branchName, docType?.toUpperCase(), docId, ownerId]
+             WHERE id = $9 AND owner_id = $10`,
+            [
+                title, content, repositoryId, repoFullName, branchName,
+                docType?.toUpperCase(), githubFileUrl, githubCommitUrl, docId, ownerId
+            ]
         );
         if (!rowCount) return res.status(404).json({ message: 'Document not found or you do not have permission to update.' });
         res.json({ message: 'Document updated successfully' });
@@ -196,20 +184,32 @@ documentsRouter.delete('/:id', authenticateAndLoadUser, async (req: Authenticate
 
 
 /* ==========================================================
-   DOCUMENT GENERATION ROUTES (Authenticated with app's JWT)
-   These routes will use the user's stored GitHub token.
+   DOCUMENT GENERATION ROUTES
 ========================================================== */
 
-// Generic helper for generation to reduce repetition
+type GeneratorFunction = (
+    repoFullName: string,
+    githubToken: string,
+    branch: string
+) => Promise<{
+    success: boolean; // Indicates if GitHub commit was successful (or overall process)
+    message: string;
+    markdownContent: string; // Standardized key for the generated content
+    githubFileUrl?: string;
+    githubCommitUrl?: string;
+    error?: string; // Error message if commit failed or generation failed
+}>;
+
+
 async function handleGeneration(
     req: AuthenticatedRequest,
     res: Response,
-    docType: string, // e.g., 'USER_MANUAL', 'API_REFERENCE'
-    generatorFunction: (repoFullName: string, githubToken: string, branch: string) => Promise<{ [key: string]: string }>
+    docType: string,
+    generatorFunction: GeneratorFunction
 ) {
     const { repoFullName, branchName } = req.body;
     const ownerId = req.user!.id;
-    const githubToken = req.dbUser?.github_access_token; // From authenticateAndLoadUser middleware
+    const githubToken = req.dbUser!.github_access_token;
 
     if (!repoFullName || !branchName) {
         return res.status(400).json({ message: 'repoFullName and branchName are required.' });
@@ -218,67 +218,88 @@ async function handleGeneration(
         return res.status(403).json({ message: 'GitHub account not linked or token missing for this user. Please link your GitHub account in settings.' });
     }
 
-    const defaultTitle = `${docType.replace(/_/g, ' ')} for ${repoFullName.split('/')[1]}`;
-    const { title = defaultTitle } = req.body; // Allow custom title from request
+    const defaultDocName = repoFullName.split('/')[1] || 'document';
+    const defaultTitle = `${docType.replace(/_/g, ' ')} for ${defaultDocName}`;
+    const { title = defaultTitle } = req.body;
 
     try {
-        console.log(`[${docType}] Generation started for ${repoFullName} by user ${ownerId}`);
+        console.log(`[${docType}] Generation and GitHub commit started for ${repoFullName} by user ${ownerId}`);
         const generationResult = await generatorFunction(repoFullName, githubToken, branchName);
-        const contentKey = Object.keys(generationResult)[0]; // e.g., 'userManual', 'apiReferenceMarkdown'
-        const generatedContent = generationResult[contentKey];
 
-        // Save the generated document to the database
+        // Even if GitHub commit failed, we still have the content and can save it to Echo DB
         const repositoryId = await getRepositoryId(ownerId, repoFullName);
         const docResult = await pool.query(
-            `INSERT INTO documents (owner_id, repository_id, title, content, repo_full_name, branch_name, doc_type)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             RETURNING id, title, doc_type, repo_full_name, branch_name, created_at, updated_at`,
-            [ownerId, repositoryId, title, generatedContent, repoFullName, branchName, docType.toUpperCase()]
+            `INSERT INTO documents (owner_id, repository_id, title, content, repo_full_name, branch_name, doc_type, github_file_url, github_commit_url)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             RETURNING id, title, doc_type, repo_full_name, branch_name, created_at, updated_at, github_file_url, github_commit_url`,
+            [
+                ownerId,
+                repositoryId,
+                title,
+                generationResult.markdownContent, // Use the standardized key
+                repoFullName,
+                branchName,
+                docType.toUpperCase(),
+                generationResult.githubFileUrl, // Store GitHub file URL (will be null if commit failed)
+                generationResult.githubCommitUrl // Store GitHub commit URL (will be null if commit failed)
+            ]
         );
-        console.log(`[${docType}] Document saved with ID: ${docResult.rows[0].id}`);
-        res.status(201).json(docResult.rows[0]); // Return the newly created document record
+        const newEchoDocument = docResult.rows[0];
+        console.log(`[${docType}] Document saved to Echo DB with ID: ${newEchoDocument.id}. GitHub commit success: ${generationResult.success}`);
 
-    } catch (error: any) {
-        console.error(`Failed to generate ${docType.toLowerCase()}:`, error);
-        res.status(500).json({ message: error.message || `Failed to generate ${docType.toLowerCase()}` });
+        if (generationResult.success) {
+            res.status(201).json({
+                message: `Successfully generated ${docType.toLowerCase()} and committed to GitHub. Document saved in Echo.`,
+                echoDocument: newEchoDocument,
+                githubFileUrl: generationResult.githubFileUrl,
+                githubCommitUrl: generationResult.githubCommitUrl
+            });
+        } else {
+            res.status(207).json({ // 207 Multi-Status: Echo save OK, GitHub commit failed
+                message: `Generated ${docType.toLowerCase()} and saved in Echo, but failed to commit to GitHub: ${generationResult.error || 'Unknown GitHub commit error'}`,
+                echoDocument: newEchoDocument,
+                githubError: generationResult.error || 'Unknown GitHub commit error'
+            });
+        }
+
+    } catch (error: any) { // Catch errors from generatorFunction or DB insert
+        console.error(`[${docType}] Overall failure to generate or save:`, error);
+        res.status(500).json({ message: error.message || `Overall failure to generate ${docType.toLowerCase()}` });
     }
 }
 
-// Endpoint for User Manual (Developer Guide)
+// Endpoint for User Manual (Developer Guide - targets README.md)
 documentsRouter.post('/generate-user-manual', authenticateAndLoadUser, (req, res) =>
     handleGeneration(req as AuthenticatedRequest, res, 'USER_MANUAL', generateUserManual)
 );
 
-// Endpoint for API Reference
+// REMOVED API REFERENCE ROUTE as per your frontend change
+// documentsRouter.post('/generate-api-reference', authenticateAndLoadUser, (req, res) =>
+//     handleGeneration(req as AuthenticatedRequest, res, 'API_REFERENCE', generateApiReference)
+// );
 
-// Endpoint for Contributing Guide
 documentsRouter.post('/generate-contributing-guide', authenticateAndLoadUser, (req, res) =>
     handleGeneration(req as AuthenticatedRequest, res, 'CONTRIBUTING_GUIDE', generateContributingGuide)
 );
 
-// Endpoint for Project Structure Explanation
 documentsRouter.post('/explain-project-structure', authenticateAndLoadUser, (req, res) =>
     handleGeneration(req as AuthenticatedRequest, res, 'PROJECT_STRUCTURE', explainProjectStructure)
 );
 
 
 /* ==========================================================
-   OLD GPT analysis route – This was public and took a token in body.
-   Consider if this is still needed or if all generation should be authenticated.
-   If kept, ensure it doesn't save to a user's documents table without auth.
+   OLD GPT analysis route – PUBLIC, NO DB SAVE, NO GITHUB COMMIT
 ========================================================== */
 documentsRouter.post('/analyze-repository', async (req: Request, res: Response) => {
     const { repoFullName, token: githubTokenFromBody, selectedBranch } = req.body;
     if (!repoFullName || !githubTokenFromBody || !selectedBranch) {
         return res.status(400).json({ message: 'Missing params: repoFullName, token, selectedBranch' });
     }
-
     try {
-        // Note: This directly uses the token from the body.
-        // This is different from the authenticated routes above which use the user's stored token.
+        // This public route calls generateUserManual which now has a complex return type.
+        // We only want to return the markdownContent for this old public route.
         const result = await generateUserManual(repoFullName, githubTokenFromBody, selectedBranch);
-        // This public route just returns the content, doesn't save it to any user.
-        res.json({ userManual: result.userManual });
+        res.json({ userManual: result.markdownContent }); // Adapt to new return structure
     } catch (e: any) {
         console.error("Error in public /analyze-repository:", e);
         res.status(500).json({ message: e.message || 'Error analyzing repository' });

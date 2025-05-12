@@ -1,22 +1,42 @@
-// contributingGuideGenerator.ts
+// be/src/services/contributingGuideGenerator.ts
 import axios from 'axios';
+import { commitFileToGithub } from './githubCommitService'; // <--- IMPORT THE NEW SERVICE
 
 const OPENAI_API_KEY = process.env.GPT_API_KEY;
-// ... (interface FileData and constants)
 
-// 👇 *** ADD 'export' HERE ***
+interface FileData {
+    path: string;
+    content: string;
+}
+
+const CONTRIBUTION_HINT_FILES = [ /* ... your list of hint files ... */
+    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+    'requirements.txt', 'Pipfile', 'poetry.lock', 'pyproject.toml',
+    'Gemfile', 'Gemfile.lock', 'composer.json', 'composer.lock',
+    'pom.xml', 'build.gradle', 'Makefile', 'Dockerfile', 'docker-compose.yml',
+    '.eslintrc.js', '.eslintrc.json', '.eslintrc.yaml', '.prettierrc.js', '.prettierrc.json',
+    '.github/workflows/', 'CONTRIBUTING.md', 'README.md'
+];
+
+
+// Modified return type
 export async function generateContributingGuide(
     repoFullName: string,
     githubToken: string,
     branch: string
-): Promise<{ contributingMarkdown: string }> {
-    // ... rest of the function
+): Promise<{
+    success: boolean;
+    message: string;
+    markdownContent: string; // Still return content for saving in Echo DB
+    githubCommitUrl?: string;
+    githubFileUrl?: string;
+    error?: string;
+}> {
     const [owner, repo] = repoFullName.split('/');
     console.log(`[Contrib Guide] Starting for ${repoFullName}, branch ${branch}`);
 
-    let fetchedFileContents: FileDataInternal[] = []; // Use FileDataInternal for this scope
-
-    // 1. Attempt to fetch content of known hint files
+    // ... (Steps to fetch hint files remain the same as in your previous version)
+    let fetchedFileContents: FileData[] = [];
     for (const filePathPattern of CONTRIBUTION_HINT_FILES) {
         if (filePathPattern.endsWith('/')) {
             try {
@@ -28,77 +48,81 @@ export async function generateContributingGuide(
                     for (const item of treeRes.data) {
                         if (item.type === 'file' && item.download_url) {
                             try {
-                                const fileRes = await axios.get(item.download_url, { headers: { Authorization: `Bearer ${githubToken}` } }); // No need for token if download_url is public, but good practice
+                                const fileRes = await axios.get(item.download_url, { headers: { Authorization: `Bearer ${githubToken}` } });
                                 fetchedFileContents.push({ path: item.path, content: fileRes.data.toString() });
-                                console.log(`[Contrib Guide] Fetched ${item.path}`);
-                            } catch (e:any) { console.warn(`[Contrib Guide] Minor error fetching ${item.path}: ${e.message}`);}
+                            } catch {}
                         }
                     }
                 }
-            } catch (e: any) {
-                console.warn(`[Contrib Guide] Could not list directory ${filePathPattern}: ${e.message}`);
-            }
+            } catch {}
         } else {
             try {
                 const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePathPattern}?ref=${branch}`;
-                const r = await axios.get(url, {
-                    headers: { Authorization: `Bearer ${githubToken}` },
-                });
+                const r = await axios.get(url, { headers: { Authorization: `Bearer ${githubToken}` }});
                 if (r.data.content) {
                     fetchedFileContents.push({
                         path: filePathPattern,
                         content: Buffer.from(r.data.content, 'base64').toString('utf-8'),
                     });
-                    console.log(`[Contrib Guide] Fetched ${filePathPattern}`);
                 }
-            } catch (e: any) {
-                console.log(`[Contrib Guide] File not found or error fetching ${filePathPattern}, skipping.`);
-            }
+            } catch {}
         }
     }
-    console.log(`[Contrib Guide] Fetched ${fetchedFileContents.length} hint files.`);
 
     if (fetchedFileContents.length === 0) {
-        return { contributingMarkdown: `# Contributing to ${repoFullName}\n\nCould not automatically determine contribution guidelines. Please refer to the project maintainers.` };
+        const noHintsMessage = "Could not find relevant files to infer contribution guidelines.";
+        return { success: false, message: noHintsMessage, markdownContent: `# Contributing to ${repoFullName}\n\n${noHintsMessage}`, error: "No hint files found" };
     }
 
-    // 2. Ask OpenAI to generate the contributing guide based on these files
-    const guide = await openaiGenerateContributingGuide(repoFullName, fetchedFileContents);
-    console.log('[Contrib Guide] Contributing guide generation complete.');
-    return { contributingMarkdown: guide };
-}
-// ... (openaiGenerateContributingGuide helper function remains un-exported)
-// Define FileDataInternal if it's different from a globally defined one, or reuse.
-interface FileDataInternal { // Renamed to avoid conflict if FileData is defined elsewhere globally
-    path: string;
-    content: string;
-}
-const CONTRIBUTION_HINT_FILES = [
-    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
-    'requirements.txt', 'Pipfile', 'poetry.lock', 'pyproject.toml',
-    'Gemfile', 'Gemfile.lock',
-    'composer.json', 'composer.lock',
-    'pom.xml', 'build.gradle',
-    'Makefile', 'Dockerfile', 'docker-compose.yml',
-    '.eslintrc.js', '.eslintrc.json', '.eslintrc.yaml', '.prettierrc.js', '.prettierrc.json',
-    '.github/workflows/',
-    'CONTRIBUTING.md',
-    'README.md'
-];
+    const generatedMarkdown = await openaiGenerateContributingGuide(repoFullName, fetchedFileContents);
 
-async function openaiGenerateContributingGuide( // keep this internal
-    repoFullName: string, filesData: FileDataInternal[]
-): Promise<string> {
-    // ... implementation
+    if (generatedMarkdown.startsWith("# Contributing to") && generatedMarkdown.includes("Error generating")) {
+        return { success: false, message: "Failed to generate content via OpenAI.", markdownContent: generatedMarkdown, error: "OpenAI generation failed" };
+    }
+
+    // Commit the generated CONTRIBUTING.md to the user's repository
+    const targetFilePath = "CONTRIBUTING.md";
+    const commitMessage = `feat: Add/Update CONTRIBUTING.md generated by EchoDocs`;
+
+    console.log(`[Contrib Guide] Attempting to commit ${targetFilePath} to ${repoFullName} on branch ${branch}`);
+    const commitResult = await commitFileToGithub(
+        repoFullName,
+        githubToken,
+        branch,
+        targetFilePath,
+        generatedMarkdown,
+        commitMessage
+    );
+
+    if (commitResult.success) {
+        console.log(`[Contrib Guide] Successfully committed ${targetFilePath}. URL: ${commitResult.html_url}`);
+        return {
+            success: true,
+            message: `Successfully generated and committed ${targetFilePath} to your repository.`,
+            markdownContent: generatedMarkdown,
+            githubFileUrl: commitResult.html_url,
+            githubCommitUrl: commitResult.commit_url,
+        };
+    } else {
+        console.error(`[Contrib Guide] Failed to commit ${targetFilePath}: ${commitResult.error}`);
+        return {
+            success: false,
+            message: `Generated contributing guide, but failed to commit to GitHub: ${commitResult.error}`,
+            markdownContent: generatedMarkdown, // Still provide content
+            error: `GitHub commit failed: ${commitResult.error}`,
+        };
+    }
+}
+
+// openaiGenerateContributingGuide helper function remains the same
+async function openaiGenerateContributingGuide(repoFullName: string, filesData: FileData[]): Promise<string> {
     if (!OPENAI_API_KEY) throw new Error("OpenAI API key is not configured.");
-    console.log('[Contrib Guide] OpenAI: Generating guide from fetched files.');
-
     const relevantFileSnippets = filesData.map(f =>
-        `File: ${f.path}\n\`\`\`\n${f.content.substring(0, 2000)}...\n\`\`\`\n(Content might be truncated)`
+        `File: ${f.path}\n\`\`\`\n${f.content.substring(0, 1500)}...\n\`\`\`\n(Content might be truncated if too long)`
     ).join('\n\n');
 
     try {
-        const res = await axios.post(
+        const res = await axios.post( /* ... OpenAI API call as before ... */
             'https://api.openai.com/v1/chat/completions',
             {
                 model: 'gpt-4o-mini',
@@ -130,6 +154,6 @@ Format the output in Markdown. Start with a title like "# Contributing to ${repo
         return res.data.choices[0].message.content.trim();
     } catch (e: any) {
         console.error(`[Contrib Guide] OpenAI API error: ${e.message}`);
-        return `# Contributing to ${repoFullName}\n\nError generating contribution guidelines: ${e.message}. Please check project files manually or contact maintainers.`;
+        return `# Contributing to ${repoFullName}\n\nError generating contribution guidelines via OpenAI: ${e.message}.`;
     }
 }
