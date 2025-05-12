@@ -8,7 +8,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import "./CSS/repolinking.css";
-import "../global-css/navbar.css";
 
 interface Repo {
     id: number;
