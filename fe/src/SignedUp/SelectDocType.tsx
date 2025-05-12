@@ -19,13 +19,7 @@ const docTypes: DocTypeOption[] = [
         endpoint: '/documents/generate-user-manual', // Matches your userManualGenerator
         outputFileName: 'USER_MANUAL.md'
     },
-    {
-        id: 'apiReference',
-        name: 'API Reference',
-        description: 'Extracts and documents public APIs (functions, classes, etc.) from your codebase.',
-        endpoint: '/documents/generate-api-reference',
-        outputFileName: 'API_REFERENCE.md'
-    },
+
     {
         id: 'contributingGuide',
         name: 'Contributing Guide',

@@ -5,7 +5,7 @@ import { pool } from '../db'; // Your database connection pool
 
 // Import your generator services
 import { analyzeRepository as generateUserManual } from '../services/userManualGenerator'; // Renamed for clarity
-import { generateApiReference } from '../services/apiReferenceGenerator';
+
 import { generateContributingGuide } from '../services/contributingGuideGenerator';
 import { explainProjectStructure } from '../services/projectStructureExplainer';
 
@@ -51,14 +51,7 @@ async function authenticateAndLoadUser(req: AuthenticatedRequest, res: Response,
         }
         req.dbUser = userResult.rows[0]; // Attach full user record
 
-        if (!req.dbUser.github_access_token) {
-            // This check can be specific to routes that NEED the github token.
-            // For listing/creating generic docs, it might not be needed.
-            // For generation routes, it's essential.
-            console.warn(`User ${decoded.username} (ID: ${decoded.id}) attempting action requiring GitHub token, but none found.`);
-            // Allow request to proceed if the route doesn't strictly need github_access_token for all paths.
-            // Specific route handlers will check req.dbUser.github_access_token if they need it.
-        }
+
         return next();
     } catch (error) {
         if (error instanceof jwt.JsonWebTokenError) {
@@ -257,9 +250,6 @@ documentsRouter.post('/generate-user-manual', authenticateAndLoadUser, (req, res
 );
 
 // Endpoint for API Reference
-documentsRouter.post('/generate-api-reference', authenticateAndLoadUser, (req, res) =>
-    handleGeneration(req as AuthenticatedRequest, res, 'API_REFERENCE', generateApiReference)
-);
 
 // Endpoint for Contributing Guide
 documentsRouter.post('/generate-contributing-guide', authenticateAndLoadUser, (req, res) =>

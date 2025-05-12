@@ -1,5 +1,5 @@
 /* =====================================================
-   UserManualsGenerators.ts           ✨ 2025‑04‑patch
+   userManualGenerator.ts           ✨ 2025‑04‑patch
    Build a *concrete* user manual from a GitHub repo
 ===================================================== */
 import axios from 'axios';

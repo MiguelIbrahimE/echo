@@ -2,39 +2,23 @@
 import axios from 'axios';
 
 const OPENAI_API_KEY = process.env.GPT_API_KEY;
+// ... (interface FileData and constants)
 
-interface FileData {
-    path: string;
-    content: string;
-}
-
-// Files that often contain clues for contribution guidelines
-const CONTRIBUTION_HINT_FILES = [
-    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml', // JS/TS project setup, scripts
-    'requirements.txt', 'Pipfile', 'poetry.lock', 'pyproject.toml', // Python
-    'Gemfile', 'Gemfile.lock', // Ruby
-    'composer.json', 'composer.lock', // PHP
-    'pom.xml', 'build.gradle', // Java/Kotlin
-    'Makefile', 'Dockerfile', 'docker-compose.yml', // Build/env setup
-    '.eslintrc.js', '.eslintrc.json', '.eslintrc.yaml', '.prettierrc.js', '.prettierrc.json', // Linters/Formatters
-    '.github/workflows/', // CI/CD pipelines for test/lint commands
-    'CONTRIBUTING.md', // Existing contributing file (to enhance or use as base)
-    'README.md' // Often contains setup/test instructions
-];
-
+// 👇 *** ADD 'export' HERE ***
 export async function generateContributingGuide(
     repoFullName: string,
     githubToken: string,
     branch: string
 ): Promise<{ contributingMarkdown: string }> {
+    // ... rest of the function
     const [owner, repo] = repoFullName.split('/');
     console.log(`[Contrib Guide] Starting for ${repoFullName}, branch ${branch}`);
 
-    let fetchedFileContents: FileData[] = [];
+    let fetchedFileContents: FileDataInternal[] = []; // Use FileDataInternal for this scope
 
     // 1. Attempt to fetch content of known hint files
     for (const filePathPattern of CONTRIBUTION_HINT_FILES) {
-        if (filePathPattern.endsWith('/')) { // It's a directory pattern (e.g., .github/workflows/)
+        if (filePathPattern.endsWith('/')) {
             try {
                 const treeRes = await axios.get(
                     `https://api.github.com/repos/${owner}/${repo}/contents/${filePathPattern}?ref=${branch}`,
@@ -44,7 +28,7 @@ export async function generateContributingGuide(
                     for (const item of treeRes.data) {
                         if (item.type === 'file' && item.download_url) {
                             try {
-                                const fileRes = await axios.get(item.download_url, { headers: { Authorization: `Bearer ${githubToken}` } });
+                                const fileRes = await axios.get(item.download_url, { headers: { Authorization: `Bearer ${githubToken}` } }); // No need for token if download_url is public, but good practice
                                 fetchedFileContents.push({ path: item.path, content: fileRes.data.toString() });
                                 console.log(`[Contrib Guide] Fetched ${item.path}`);
                             } catch (e:any) { console.warn(`[Contrib Guide] Minor error fetching ${item.path}: ${e.message}`);}
@@ -54,7 +38,7 @@ export async function generateContributingGuide(
             } catch (e: any) {
                 console.warn(`[Contrib Guide] Could not list directory ${filePathPattern}: ${e.message}`);
             }
-        } else { // It's a specific file
+        } else {
             try {
                 const url = `https://api.github.com/repos/${owner}/${repo}/contents/${filePathPattern}?ref=${branch}`;
                 const r = await axios.get(url, {
@@ -68,7 +52,6 @@ export async function generateContributingGuide(
                     console.log(`[Contrib Guide] Fetched ${filePathPattern}`);
                 }
             } catch (e: any) {
-                // It's okay if some files are not found
                 console.log(`[Contrib Guide] File not found or error fetching ${filePathPattern}, skipping.`);
             }
         }
@@ -84,8 +67,29 @@ export async function generateContributingGuide(
     console.log('[Contrib Guide] Contributing guide generation complete.');
     return { contributingMarkdown: guide };
 }
+// ... (openaiGenerateContributingGuide helper function remains un-exported)
+// Define FileDataInternal if it's different from a globally defined one, or reuse.
+interface FileDataInternal { // Renamed to avoid conflict if FileData is defined elsewhere globally
+    path: string;
+    content: string;
+}
+const CONTRIBUTION_HINT_FILES = [
+    'package.json', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+    'requirements.txt', 'Pipfile', 'poetry.lock', 'pyproject.toml',
+    'Gemfile', 'Gemfile.lock',
+    'composer.json', 'composer.lock',
+    'pom.xml', 'build.gradle',
+    'Makefile', 'Dockerfile', 'docker-compose.yml',
+    '.eslintrc.js', '.eslintrc.json', '.eslintrc.yaml', '.prettierrc.js', '.prettierrc.json',
+    '.github/workflows/',
+    'CONTRIBUTING.md',
+    'README.md'
+];
 
-async function openaiGenerateContributingGuide(repoFullName: string, filesData: FileData[]): Promise<string> {
+async function openaiGenerateContributingGuide( // keep this internal
+    repoFullName: string, filesData: FileDataInternal[]
+): Promise<string> {
+    // ... implementation
     if (!OPENAI_API_KEY) throw new Error("OpenAI API key is not configured.");
     console.log('[Contrib Guide] OpenAI: Generating guide from fetched files.');
 
