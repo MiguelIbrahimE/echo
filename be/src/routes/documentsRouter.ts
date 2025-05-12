@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { pool } from '../db';
-import { analyzeRepository } from '../services/documentService';
+import { analyzeRepository } from '../services/UserManualsGenerators';
 
 const documentsRouter = Router();
 

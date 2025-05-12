@@ -2,33 +2,24 @@
 import express, { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { exec } from 'child_process';
-import { pool } from '../db';
+import jwt from 'jsonwebtoken'; // Your app's JWT
+import { pool } from '../db'; // Assuming your db.ts exports pool
+
 const router = express.Router();
 
-/* =====================================
-   Read environment variables directly
-===================================== */
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
-const JWT_SECRET = process.env.JWT_SECRET;
-const FRONTEND_REDIRECT_URI = process.env.FRONTEND_URL || 'http://localhost:5173/link-github';
+const JWT_SECRET = process.env.JWT_SECRET; // Your app's JWT secret
+// This is where your BACKEND redirects the user's BROWSER after backend processing
+const FRONTEND_OAUTH_CALLBACK_URL = process.env.FRONTEND_OAUTH_CALLBACK_URL || 'http://localhost:5173/auth/oauth-callback';
+// This is the URL GitHub redirects to on your BACKEND
+const GITHUB_BACKEND_CALLBACK_URL = process.env.GITHUB_BACKEND_CALLBACK_URL || `http://localhost:${process.env.PORT || 5001}/auth/github/callback`;
 
-// If these are crucial, throw an error if missing instead of a fallback
-if (!CLIENT_ID) {
-    throw new Error('GITHUB_CLIENT_ID is not set in environment variables.');
-}
-if (!CLIENT_SECRET) {
-    throw new Error('GITHUB_CLIENT_SECRET is not set in environment variables.');
-}
-if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET is not set in environment variables.');
+
+if (!CLIENT_ID || !CLIENT_SECRET || !JWT_SECRET) {
+    throw new Error('Missing GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, or JWT_SECRET in environment variables.');
 }
 
-/* =====================================
-   Helper for async/await error handling
-===================================== */
 const asyncHandler =
     (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) =>
         (req: Request, res: Response, next: NextFunction) =>
@@ -38,204 +29,147 @@ const asyncHandler =
    GITHUB OAUTH ROUTES
 ===================================== */
 
-/**
- * STEP 1: Redirect user to GitHub's OAuth dialog
- * GET /auth/github
- */
+// STEP 1: Redirect user to GitHub's OAuth dialog
 router.get(
     '/github',
     asyncHandler(async (req: Request, res: Response) => {
-        // Where GitHub will redirect back
-        const port = process.env.PORT || 5001;
-        const backendCallbackUrl = `http://localhost:${port}/auth/github/callback`;
-
-        // Build GitHub’s authorize URL with client_id, redirect_uri, scopes
         const authorizeUrl =
             `https://github.com/login/oauth/authorize` +
             `?client_id=${CLIENT_ID}` +
-            `&redirect_uri=${backendCallbackUrl}` +
-            `&scope=repo`; // or 'user', 'gist', etc.
+            `&redirect_uri=${encodeURIComponent(GITHUB_BACKEND_CALLBACK_URL)}` + // Your backend callback
+            `&scope=repo%20user:email`; // Request repo access and user email
 
         console.log(`Redirecting to GitHub: ${authorizeUrl}`);
         return res.redirect(authorizeUrl);
     })
 );
 
-/**
- * STEP 2: GitHub calls back to /auth/github/callback with "?code=..."
- * GET /auth/github/callback
- */
+// STEP 2: GitHub calls back to this endpoint
 router.get(
     '/github/callback',
     asyncHandler(async (req: Request, res: Response) => {
-        const { code } = req.query;
+        const { code, error: oauthError, error_description } = req.query;
+
+        if (oauthError) {
+            console.error(`GitHub OAuth Error: ${oauthError} - ${error_description}`);
+            return res.redirect(`${FRONTEND_OAUTH_CALLBACK_URL}?status=error&error=${encodeURIComponent(oauthError as string)}&error_description=${encodeURIComponent(error_description as string)}`);
+        }
 
         if (!code) {
-            return res.status(400).json({ message: 'GitHub code is missing' });
+            return res.redirect(`${FRONTEND_OAUTH_CALLBACK_URL}?status=error&error=missing_code`);
         }
 
-        // Exchange the code for an access token
-        const tokenResponse = await axios.post(
-            'https://github.com/login/oauth/access_token',
-            { client_id: CLIENT_ID, client_secret: CLIENT_SECRET, code },
-            { headers: { accept: 'application/json' } }
-        );
+        try {
+            // Exchange the code for a GitHub access token
+            const tokenResponse = await axios.post(
+                'https://github.com/login/oauth/access_token',
+                {
+                    client_id: CLIENT_ID,
+                    client_secret: CLIENT_SECRET,
+                    code,
+                    redirect_uri: GITHUB_BACKEND_CALLBACK_URL, // Must match
+                },
+                { headers: { accept: 'application/json' } }
+            );
 
-        const { access_token } = tokenResponse.data;
-        console.log('GitHub Access Token:', access_token);
+            const { access_token: githubAccessToken, error: tokenError } = tokenResponse.data;
 
-        if (!access_token) {
-            return res.status(400).json({ message: 'No access token returned by GitHub' });
+            if (tokenError || !githubAccessToken) {
+                console.error('Error getting GitHub access token:', tokenError || 'No access token returned');
+                return res.redirect(`${FRONTEND_OAUTH_CALLBACK_URL}?status=error&error=${encodeURIComponent(tokenError || 'token_exchange_failed')}`);
+            }
+
+            // Fetch GitHub user profile with the GitHub access token
+            const githubUserResponse = await axios.get('https://api.github.com/user', {
+                headers: { Authorization: `Bearer ${githubAccessToken}` },
+            });
+            const githubUser = githubUserResponse.data;
+
+            // Fetch user's primary email if not available in main profile
+            let userEmail = githubUser.email;
+            if (!userEmail) {
+                const emailResponse = await axios.get('https://api.github.com/user/emails', {
+                    headers: { Authorization: `Bearer ${githubAccessToken}` },
+                });
+                const primaryEmail = emailResponse.data.find((e: any) => e.primary && e.verified);
+                if (primaryEmail) userEmail = primaryEmail.email;
+            }
+            if (!userEmail) userEmail = `${githubUser.login}@github.user`; // Fallback email
+
+            // Find or create user in your database
+            let appUserQuery = await pool.query('SELECT id, username FROM users WHERE github_id = $1', [githubUser.id]);
+            let appUser;
+
+            if (appUserQuery.rows.length === 0) {
+                // User doesn't exist, create a new one
+                // Ensure your 'users' table has 'github_id' (BIGINT or TEXT), 'github_access_token' (TEXT)
+                // Use githubUser.login as default username, handle potential conflicts if needed
+                const insertResult = await pool.query(
+                    'INSERT INTO users (username, email, github_id, github_access_token) VALUES ($1, $2, $3, $4) RETURNING id, username',
+                    [githubUser.login, userEmail, githubUser.id.toString(), githubAccessToken]
+                );
+                appUser = insertResult.rows[0];
+            } else {
+                // User exists, update their GitHub access token
+                await pool.query('UPDATE users SET github_access_token = $1, email = $2 WHERE github_id = $3',
+                    [githubAccessToken, userEmail, githubUser.id.toString()]);
+                appUser = appUserQuery.rows[0];
+            }
+
+            // Generate YOUR application's JWT
+            const appToken = jwt.sign(
+                { id: appUser.id, username: appUser.username },
+                JWT_SECRET,
+                { expiresIn: '7d' } // Example: 7 day expiry
+            );
+
+            // Redirect to your front-end callback with your app's token
+            console.log(`Successfully authenticated GitHub user ${appUser.username}. Redirecting to frontend.`);
+            return res.redirect(`${FRONTEND_OAUTH_CALLBACK_URL}?appToken=${appToken}&status=success&provider=github`);
+
+        } catch (error: any) {
+            console.error('Error in GitHub OAuth callback:', error.message);
+            if (axios.isAxiosError(error) && error.response) {
+                console.error("Axios error data:", error.response.data);
+            }
+            return res.redirect(`${FRONTEND_OAUTH_CALLBACK_URL}?status=error&error=callback_processing_failed`);
         }
-
-        // Optionally: fetch user’s GitHub profile
-        // const userResp = await axios.get('https://api.github.com/user', {
-        //   headers: { Authorization: `Bearer ${access_token}` },
-        // });
-        // const ghUser = userResp.data;
-
-        // Redirect to your front-end with ?token=...
-        const redirectUrl = `${FRONTEND_REDIRECT_URI}?token=${access_token}`;
-        return res.redirect(redirectUrl);
     })
 );
 
-/**
- * GET /auth/github/repos
- * Example route to fetch user’s GitHub repos with Bearer token
- */
+// ... (your existing /signup, /login, and other routes in authRouter.ts) ...
+// Make sure your /github/repos route uses the appToken to find the user, then uses their stored github_access_token
 router.get(
     '/github/repos',
     asyncHandler(async (req: Request, res: Response) => {
-        const bearerToken = req.headers.authorization || '';
-        const token = bearerToken.split(' ')[1];
-        if (!token) {
-            return res.status(401).json({ message: 'Missing GitHub access token' });
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ message: 'Missing or invalid app token' });
         }
+        const appToken = authHeader.split(' ')[1];
 
-        const response = await axios.get('https://api.github.com/user/repos', {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        return res.json(response.data);
-    })
-);
+        try {
+            const decoded = jwt.verify(appToken, JWT_SECRET) as { id: number, username: string };
+            const userResult = await pool.query('SELECT github_access_token FROM users WHERE id = $1', [decoded.id]);
 
-/**
- * POST /auth/trigger-pipeline
- * Example route to trigger a pipeline (Dagster or similar)
- */
-router.post(
-    '/trigger-pipeline',
-    asyncHandler(async (req: Request, res: Response) => {
-        const { repoUrl, token, user_id } = req.body;
-        if (!repoUrl || !token || !user_id) {
-            return res.status(400).json({ message: 'Missing repoUrl, token, or user_id' });
-        }
-
-        // If your pipeline expects environment variables
-        process.env.GITHUB_REPO_URL = repoUrl;
-        process.env.GITHUB_ACCESS_TOKEN = token;
-        process.env.USER_ID = user_id;
-
-        exec(
-            'dagster pipeline execute -f /app/pipeline/run_pipeline.py -j run_code_analysis_pipeline',
-            (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`Error triggering pipeline: ${error.message}`);
-                    return res.status(500).json({ message: 'Error triggering pipeline' });
-                }
-                console.log(`Pipeline output: ${stdout}`);
-                return res.status(200).json({ message: 'Pipeline triggered successfully' });
+            if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
+                return res.status(403).json({ message: 'GitHub account not linked or token missing.' });
             }
-        );
+            const githubAccessToken = userResult.rows[0].github_access_token;
+
+            const response = await axios.get('https://api.github.com/user/repos?sort=updated&per_page=100', { // Get more repos, sorted
+                headers: { Authorization: `Bearer ${githubAccessToken}` },
+            });
+            return res.json(response.data);
+        } catch (error) {
+            if (error instanceof jwt.JsonWebTokenError) {
+                return res.status(401).json({ message: 'Invalid app token.' });
+            }
+            console.error("Error fetching GitHub repos:", error);
+            return res.status(500).json({ message: 'Failed to fetch GitHub repositories.' });
+        }
     })
 );
 
-/* =====================================
-   LOCAL AUTH ROUTES
-===================================== */
-
-/**
- * POST /auth/signup
- * Create a new user with email, username, password
- */
-router.post(
-    '/signup',
-    asyncHandler(async (req: Request, res: Response) => {
-        const { email, username, password } = req.body;
-        if (!email || !username || !password) {
-            return res.status(400).json({ message: 'Missing fields' });
-        }
-
-        // Check if email or username is taken
-        const existing = await pool.query(
-            'SELECT * FROM users WHERE email=$1 OR username=$2',
-            [email, username]
-        );
-        if (existing.rows.length > 0) {
-            return res.status(400).json({ message: 'Email or username already taken' });
-        }
-
-        // Hash the password
-        const saltRounds = 10;
-        const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-        // Insert new user
-        const result = await pool.query(
-            `INSERT INTO users (email, username, password)
-       VALUES ($1, $2, $3)
-       RETURNING id, username`,
-            [email, username, hashedPassword]
-        );
-        const newUser = result.rows[0];
-
-        // Create JWT
-        const token = jwt.sign(
-            { id: newUser.id, username: newUser.username },
-            JWT_SECRET, // from environment
-            { expiresIn: '1h' }
-        );
-
-        return res.json({
-            message: 'Sign-up successful!',
-            token,
-            username: newUser.username,
-        });
-    })
-);
-
-/**
- * POST /auth/login
- * Verify username/password, return a JWT
- */
-router.post(
-    '/login',
-    asyncHandler(async (req: Request, res: Response) => {
-        const { username, password } = req.body;
-        if (!username || !password) {
-            return res.status(400).json({ message: 'Username and password are required.' });
-        }
-
-        // Find user by username
-        const result = await pool.query('SELECT * FROM users WHERE username=$1', [username]);
-        const user = result.rows[0];
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid username or password.' });
-        }
-
-        // Compare hashed password
-        const match = await bcrypt.compare(password, user.password);
-        if (!match) {
-            return res.status(401).json({ message: 'Invalid username or password.' });
-        }
-
-        // Generate JWT
-        const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, {
-            expiresIn: '1h',
-        });
-
-        return res.json({ token, username: user.username });
-    })
-);
 
 export default router;
