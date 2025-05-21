@@ -8,7 +8,7 @@ import { FiMenu } from 'react-icons/fi';
 import { FaGithub } from 'react-icons/fa';
 import './App.css';
 // import './global-css/navbar.css'; // Assumed to be imported in main.tsx
-
+import "./global-css/navbar.css"
 interface ApiResponse {
     message?: string;
     token?: string;
