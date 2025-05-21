@@ -1,45 +1,96 @@
-/* navbar.css */
+/* Add to or update in: fe/src/global-css/navbar.css */
 
 /* Navbar Container */
 .navbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 2rem;
+    padding: 0.8rem 1.5rem; /* Adjusted padding slightly for potentially smaller navbar items */
     background-color: #fff;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid #eee; /* Lighter border */
+    position: sticky; /* Optional: make navbar sticky */
+    top: 0;
+    z-index: 1000;
 }
 
 /* Brand (logo/title) */
 .brand {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.6rem; /* Slightly larger */
     font-weight: bold;
+    color: #333; /* Example color */
+    text-decoration: none; /* If it's a link */
 }
 
-/* Right-side container (optional) */
+/* Right-side container */
 .nav-right {
     display: flex;
+    align-items: center; /* Important for vertical alignment of mixed items */
     gap: 1rem;
 }
 
 /* Generic nav button */
 .nav-btn {
     background-color: transparent;
-    border: 1px solid #333;
-    padding: 0.5rem 1rem;
+    border: 1px solid #555; /* Slightly darker border for contrast */
+    color: #333;
+    padding: 0.4rem 0.9rem; /* Adjusted padding */
     cursor: pointer;
-    transition: background-color 0.2s;
-    font-size: 0.9rem;
+    font-size: 0.85rem; /* Slightly smaller font */
+    border-radius: 4px;
+    /* transition: background-color 0.2s, color 0.2s; */ /* Removed transition as requested */
 }
 
 .nav-btn:hover {
-    background-color: #333;
-    color: #fff;
+    background-color: #f0f0f0; /* Lighter hover for non-primary buttons */
+    /* color: #fff; */ /* Keep original text color or adjust as needed */
 }
 
 /* “Sign Up” button with different styling */
 .signup-btn {
     background-color: #333;
     color: #fff;
+    border-color: #333;
+}
+
+.signup-btn:hover {
+    background-color: #555; /* Darken on hover */
+    border-color: #555;
+}
+
+/* Styling for the Buy Me a Coffee link specifically in the navbar */
+.bmc-link-navbar {
+    display: inline-flex; /* Helps with alignment */
+    align-items: center;
+    text-decoration: none;
+    /* margin-right: 1rem; /* This gap is now handled by nav-right's gap */
+}
+
+.bmc-logo-img { /* Class specific to the image for easier targeting */
+    height: 36px;   /* Adjust to fit your navbar's height */
+    width: auto;    /* Maintain aspect ratio */
+    border-radius: 6px; /* Slightly less rounding than a big button */
+    /* Removed box-shadow and transform/transition for hover as requested */
+}
+
+/* Wrapper for logged-in user info to ensure alignment with BMC button and menu icon */
+.nav-user-session {
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* This will provide spacing between "Hi, User!", (BMC if moved here), and burger */
+}
+
+.burger-icon {
+    cursor: pointer;
+    display: flex; /* Helps if you want to add padding/margin directly */
+    align-items: center;
+}
+
+/* Ensure menu items are easily clickable */
+.nav-item {
+    padding: 0.5rem 1rem; /* Add some padding to menu items for better clickability */
+    cursor: pointer;
+}
+.nav-item:hover {
+    background-color: #f0f0f0; /* Visual feedback for menu item hover */
 }

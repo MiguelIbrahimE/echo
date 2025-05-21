@@ -1,8 +1,20 @@
+/* Prepend this to your settings.css or ensure it's loaded */
+.settings-page-wrapper {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    width: 100%; /* Ensure it takes full available width */
+    box-sizing: border-box; /* Good practice for width calculations */
+}
+
 /* ================= settings.css ================= */
 .settings-container {
-    max-width: 640px;
-    margin: 2rem auto;
-    padding: 0 1rem;
+    /* max-width: 640px; /* REMOVED for full width */
+    /* margin: 2rem auto; /* CHANGED for full width */
+    margin: 2rem 0; /* Top/Bottom margin */
+    padding: 0 1.5rem; /* Side padding for content spacing within the full width */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .settings-title {
@@ -14,18 +26,43 @@
 .setting-row {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 1rem; /* Consistent gap between direct children */
     margin-bottom: 1.25rem;
-    flex-wrap: wrap;
+    flex-wrap: wrap; /* Allow items to wrap to the next line */
 }
 
 .setting-label {
-    flex: 0 0 150px;
+    width: 150px; /* Maintain a fixed width for the label on larger screens */
+    flex-shrink: 0; /* Prevent label from shrinking */
     font-weight: 500;
 }
 
-.setting-value {
-    color: #0d9488;       /* teal-600 */
+.setting-value,
+.key-input {
+    flex-grow: 1; /* Allow value/input to take available space */
+    flex-basis: 200px; /* Default width, can grow/shrink */
+    min-width: 150px; /* Prevent it from becoming too small before wrapping */
+}
+
+.setting-value { /* Specific to the display span for the key */
+    color: #0d9488;
+    word-break: break-all;
+}
+
+.key-input { /* Specific to the input field */
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 0.75rem; /* Space between buttons */
+    align-items: center;
+    margin-left: auto; /* Push buttons to the right on wider screens */
+    flex-shrink: 0; /* Prevent this group from shrinking unduly */
 }
 
 .edit-btn,
@@ -37,21 +74,87 @@
     font-size: 0.85rem;
     cursor: pointer;
     transition: background 0.15s ease;
+    white-space: nowrap;
 }
 
-.edit-btn { background: #e5e7eb; }         /* gray-200 */
-.edit-btn:hover { background: #d1d5db; }   /* gray-300 */
+.edit-btn { background: #e5e7eb; color: #374151; }
+.edit-btn:hover { background: #d1d5db; }
 
 .save-btn { background: #0d9488; color:#fff; }
 .save-btn:hover { background:#0f766e; }
 
-.cancel-btn { background: transparent; }
-.cancel-btn:hover { text-decoration: underline; }
+.cancel-btn { background: transparent; color: #4b5563; }
+.cancel-btn:hover { text-decoration: underline; color: #1f2937; }
 
-.key-input {
-    flex: 1 1 220px;
-    padding: 0.45rem 0.6rem;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    font-size: 0.9rem;
+/* Navbar styles */
+.navbar-signedin {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-family: sans-serif; /* Consider using a more widely available sans-serif stack */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.navbar-signedin .brand {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #111827;
+    text-decoration: none;
+}
+
+.navbar-signedin .nav-right {
+    cursor: pointer;
+    color: #0d9488;
+    font-weight: 500;
+}
+.navbar-signedin .nav-right:hover {
+    text-decoration: underline;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) { /* Adjusted breakpoint for more general responsiveness, e.g., tablets */
+    .settings-container {
+        padding: 0 1rem; /* Reduce side padding a bit */
+    }
+    .navbar-signedin {
+        padding: 0.75rem 1rem; /* Reduce navbar padding */
+    }
+    .navbar-signedin .brand {
+        font-size: 1.3rem; /* Slightly smaller brand text */
+    }
+
+    .setting-row {
+        flex-direction: column; /* Stack all items in the row vertically */
+        align-items: stretch; /* Make items take full width of the column */
+        gap: 0.75rem; /* Adjust gap for stacked items */
+    }
+    .setting-label {
+        width: auto; /* Label takes natural width */
+        margin-bottom: 0.25rem; /* Smaller margin when stacked */
+    }
+    .setting-value {
+        margin-bottom: 0.5rem; /* Space below displayed value if not editing */
+    }
+    .key-input {
+        width: 100%; /* Full width when stacked */
+        margin-bottom: 0.5rem; /* Space below input */
+        flex-basis: auto; /* Reset flex-basis */
+    }
+
+    .setting-actions {
+        margin-left: 0; /* Reset margin when stacked */
+        width: 100%;
+        flex-direction: column; /* Stack buttons vertically */
+        gap: 0.5rem; /* Space between stacked buttons */
+    }
+
+    .setting-actions .edit-btn,
+    .setting-actions .save-btn,
+    .setting-actions .cancel-btn {
+        width: 100%; /* Make buttons full width in stacked actions */
+    }
 }

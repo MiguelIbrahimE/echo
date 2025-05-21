@@ -1,17 +1,14 @@
 /* =========================================================
    App.tsx – landing page, auth modals, recent docs
-   (This version is the same as the previous one, as it's correctly
-    set up for initiating OAuth via backend and listening for auth changes.
-    The described problem likely lies in the OAuth callback handling
-    or LinkGithubRepo.tsx logic AFTER App.tsx has done its part.)
+   (BMC logo in Navbar, no transitions)
 ========================================================= */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FiMenu } from 'react-icons/fi';
 import { FaGithub } from 'react-icons/fa';
 import './App.css';
-import './global-css/navbar.css';
-
+// import './global-css/navbar.css'; // Assumed to be imported in main.tsx
+import "./global-css/navbar.css"
 interface ApiResponse {
     message?: string;
     token?: string;
@@ -71,16 +68,12 @@ const App: React.FC = () => {
 
     const handleLogout = useCallback(() => {
         localStorage.removeItem('myAppToken');
-        localStorage.removeItem('ghToken'); // Also clear GitHub token if stored
-        window.dispatchEvent(new Event("storage")); // Trigger auth check to update loggedInUser
+        localStorage.removeItem('ghToken');
+        window.dispatchEvent(new Event("storage"));
         setIsMenuOpen(false);
         navigate('/');
     }, [navigate]);
 
-    /* =====================================================
-       1)  Check JWT on mount & listen for storage changes (for OAuth callback)
-           This is crucial for recognizing login after OAuth.
-    ===================================================== */
     useEffect(() => {
         const checkAuth = () => {
             const token = localStorage.getItem('myAppToken');
@@ -90,43 +83,33 @@ const App: React.FC = () => {
                     setLoggedInUser(decoded.username);
                 } else {
                     console.warn("Invalid token structure found in localStorage. Logging out.");
-                    localStorage.removeItem('myAppToken'); // Ensure bad token is removed
-                    setLoggedInUser(null); // Update state to reflect logged out
+                    localStorage.removeItem('myAppToken');
+                    setLoggedInUser(null);
                 }
             } else {
                 setLoggedInUser(null);
             }
         };
-
-        checkAuth(); // Initial check
-
+        checkAuth();
         window.addEventListener('storage', checkAuth);
         return () => {
             window.removeEventListener('storage', checkAuth);
         };
     }, []);
 
-
-    /* =====================================================
-       2)  Fetch recent documents once we know user is logged
-    ===================================================== */
     useEffect(() => {
         if (!loggedInUser) {
-            setRecentDocs([]); // Clear docs if user logs out
+            setRecentDocs([]);
             return;
         }
         (async () => {
             try {
                 const jwt = localStorage.getItem('myAppToken');
                 if (!jwt) {
-                    // This case means loggedInUser was set, but token disappeared.
-                    // The 'storage' event listener should ideally catch this,
-                    // but as a fallback:
                     console.warn("loggedInUser is set, but no token in localStorage. Forcing logout.");
-                    handleLogout(); // This will trigger a state update and re-evaluation.
+                    handleLogout();
                     return;
                 }
-
                 const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/documents/recent`, {
                     headers: { Authorization: `Bearer ${jwt}` },
                 });
@@ -150,9 +133,6 @@ const App: React.FC = () => {
         })();
     }, [loggedInUser, handleLogout]);
 
-    /* =====================================================
-       Validation helpers
-    ===================================================== */
     const validateEmail = (val: string) => {
         setEmail(val);
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -184,51 +164,27 @@ const App: React.FC = () => {
         setConfirmPasswordError(val && val !== password ? 'Passwords do not match' : '');
     };
 
-    /* =====================================================
-       OAuth Initiators (Redirect to Backend)
-       These correctly send the user to your backend, which then redirects to GitHub.
-    ===================================================== */
-    // const handleGoogleSignIn = () => { // If you re-add Google Sign In
-    //     window.location.href = `${import.meta.env.VITE_API_BASE_URL}/auth/google`;
-    // };
-
     const handleGithubOAuthSignIn = () => {
         window.location.href = `${import.meta.env.VITE_API_BASE_URL}/auth/github`;
     };
 
-
-    /* =====================================================
-       Signup / Login API handlers
-    ===================================================== */
     const performFullFormValidation = () => {
-        // Ensure validation functions are called for all fields before checking errors
-        validateUsername(username); // ensure state is current before checking usernameError
+        validateUsername(username);
         validateEmail(email);
         handlePasswordChange(password);
         handleConfirmPassword(confirmPassword);
-
-        // Check if any field is empty after trimming (except password fields which are checked by length)
-        if (!email.trim() || !username.trim() || !password || !confirmPassword) {
-            return false; // One of the required fields is empty
-        }
-        // Check for any existing error messages
-        if (emailError || usernameError || passwordError || confirmPasswordError) {
-            return false;
-        }
-        // Check password criteria
-        if (!(hasMinLength && hasUppercase && hasNumber && hasSpecialChar)) {
-            return false;
-        }
+        if (!email.trim() || !username.trim() || !password || !confirmPassword) return false;
+        if (emailError || usernameError || passwordError || confirmPasswordError) return false;
+        if (!(hasMinLength && hasUppercase && hasNumber && hasSpecialChar)) return false;
         return true;
     };
 
     const handleSignUpSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!performFullFormValidation()) { // Call this to ensure all states are up-to-date for the check
+        if (!performFullFormValidation()) {
             alert('Please correct the errors in the form and ensure all fields are filled correctly and password meets criteria.');
             return;
         }
-
         try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/signup`, {
                 method: 'POST',
@@ -238,7 +194,7 @@ const App: React.FC = () => {
             const data: ApiResponse = await res.json().catch(() => ({ message: "Invalid JSON response from server." }));
             if (res.ok && data.token && data.username) {
                 localStorage.setItem('myAppToken', data.token);
-                window.dispatchEvent(new Event("storage")); // Crucial for checkAuth to run
+                window.dispatchEvent(new Event("storage"));
                 alert('Sign‑up successful!');
                 handleCloseSignUp();
                 navigate('/link-github');
@@ -257,7 +213,6 @@ const App: React.FC = () => {
             alert('Username/Email and password are required.');
             return;
         }
-
         try {
             const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, {
                 method: 'POST',
@@ -265,10 +220,9 @@ const App: React.FC = () => {
                 body: JSON.stringify({ username: loginUsername, password: loginPassword }),
             });
             const data: ApiResponse = await res.json().catch(() => ({ message: "Invalid JSON response from server." }));
-
             if (res.ok && data.token && data.username) {
                 localStorage.setItem('myAppToken', data.token);
-                window.dispatchEvent(new Event("storage")); // Crucial for checkAuth to run
+                window.dispatchEvent(new Event("storage"));
                 alert('Logged in successfully!');
                 handleCloseLogin();
                 navigate('/documents');
@@ -281,18 +235,12 @@ const App: React.FC = () => {
         }
     };
 
-    /* =====================================================
-       Navbar & menu helpers
-    ===================================================== */
     const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
     const handleMenuClick = (path: string) => {
         navigate(path);
         setIsMenuOpen(false);
     };
 
-    /* =====================================================
-       Modal toggles & reset
-    ===================================================== */
     const resetSignUpForm = () => {
         setEmail(''); setUsername(''); setPassword(''); setConfirmPassword('');
         setEmailError(''); setUsernameError(''); setPasswordError(''); setConfirmPasswordError('');
@@ -304,38 +252,47 @@ const App: React.FC = () => {
 
     const handleOpenSignUp = () => { resetLoginForm(); setIsLoginOpen(false); setIsSignUpOpen(true); };
     const handleCloseSignUp = () => { setIsSignUpOpen(false); resetSignUpForm(); };
-
     const handleOpenLogin = () => { resetSignUpForm(); setIsSignUpOpen(false); setIsLoginOpen(true); };
     const handleCloseLogin = () => { setIsLoginOpen(false); resetLoginForm(); };
 
-
-    /* =====================================================
-       Recently‑edited open helper
-    ===================================================== */
     const openDocument = (doc: DocBrief) => {
         if (!doc.repo_full_name) {
             alert('This document does not have a linked GitHub repository.');
             return;
         }
-        // With a backend-centric GitHub token flow, `ghToken` in localStorage or URL becomes less relevant here.
-        // Navigation to the document page should ideally just use IDs or repo names,
-        // and the DocumentPage component would fetch its content using the app's JWT.
         navigate(`/document-page?repo=${encodeURIComponent(doc.repo_full_name)}&branch=${doc.branch_name || 'main'}`);
     };
 
-    /* =====================================================
-       Render
-    ===================================================== */
     return (
         <div className="landing-page">
             {/* ---------- Navbar ---------- */}
             <header className="navbar">
-                <div className="nav-left"><h1 className="brand" onClick={() => navigate('/')} style={{cursor: 'pointer'}}>echo</h1></div>
+                <div className="nav-left">
+                    <h1 className="brand" onClick={() => navigate('/')} style={{cursor: 'pointer'}}>echo</h1>
+                </div>
                 <div className="nav-right">
+                    {/* Buy Me A Coffee Link - Placed before login/user controls */}
+                    <a
+                        href="https://buymeacoffee.com/prometheus.desico"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bmc-link-navbar"
+                        aria-label="Buy Me a Coffee"
+                        title="Support Echo on Buy Me a Coffee"
+                    >
+                        <img
+                            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+                            alt="Buy Me a Coffee"
+                            className="bmc-logo-img"
+                        />
+                    </a>
+
+
                     {loggedInUser ? (
-                        <div className="nav-container">
-                            <span style={{marginRight: "10px", cursor: 'default'}}>Hi, {loggedInUser}!</span>
-                            <div className="burger-icon" onClick={toggleMenu} role="button" tabIndex={0} onKeyPress={(e) => e.key === 'Enter' && toggleMenu()} >
+                        <div className="nav-user-session"> {/* Wrapper for better flex alignment */}
+                            <span style={{cursor: 'default'}}>Hi, {loggedInUser}!</span>
+                            <div className="burger-icon" onClick={toggleMenu} role="button" tabIndex={0}
+                                 onKeyPress={(e) => e.key === 'Enter' && toggleMenu()}>
                                 <FiMenu size={24}/>
                             </div>
                         </div>
@@ -350,7 +307,8 @@ const App: React.FC = () => {
 
             {/* ---------- Fly‑out menu ---------- */}
             {loggedInUser && isMenuOpen && (
-                <div className="menu-overlay" onClick={() => setIsMenuOpen(false)} role="button" tabIndex={0} onKeyPress={(e) => e.key === 'Enter' && setIsMenuOpen(false)} >
+                <div className="menu-overlay" onClick={() => setIsMenuOpen(false)} role="button" tabIndex={0}
+                     onKeyPress={(e) => e.key === 'Enter' && setIsMenuOpen(false)}>
                     <div className="nav-items" onClick={e => e.stopPropagation()} role="menu">
                         <div className="nav-item" role="menuitem" tabIndex={0} onClick={() => handleMenuClick('/documents')} onKeyPress={(e) => e.key === 'Enter' && handleMenuClick('/documents')}>My Documents</div>
                         <div className="nav-item" role="menuitem" tabIndex={0} onClick={() => handleMenuClick('/link-github')} onKeyPress={(e) => e.key === 'Enter' && handleMenuClick('/link-github')}>Link GitHub</div>
@@ -360,16 +318,16 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* ---------- Hero ---------- */}
+            {/* ... (rest of your component: Hero, Recent Docs, Info Section, Modals) ... */}
+            {/* You can remove the separate "buy-me-a-coffee-section" if it's now in the navbar */}
             <section className="hero">
                 <div className="hero-content">
                     <h2 className="hero-title">Ever <span className="text-red">suffered</span> with <span className="text-teal">code documentation?</span></h2>
                     <p className="hero-subtitle">Give it another <span className="text-green">chance</span> with <span className="text-teal">echo</span></p>
-                    <button className="cta-btn" onClick={() => loggedInUser ? navigate('/my-documents') : handleOpenSignUp() }>Try now</button>
+                    <button className="cta-btn" onClick={() => loggedInUser ? navigate('/documents') : handleOpenSignUp() }>Try now</button>
                 </div>
             </section>
 
-            {/* ---------- Recently edited ---------- */}
             {loggedInUser && (
                 <section className="recent-section">
                     <h3>Your recently edited manuals</h3>
@@ -391,10 +349,9 @@ const App: React.FC = () => {
             )}
 
 
-            {/* ---------- Info / Features ---------- */}
             <section className="info-section">
                 <div className="code-tree-container">
-          <pre className="code-tree">{`Project
+                  <pre className="code-tree">{`Project
 ├── fe
 │   └── src
 ├── be
@@ -414,8 +371,9 @@ const App: React.FC = () => {
                 </div>
             </section>
 
-            {/* ---------- Modals ---------- */}
-            {/* Sign‑Up Modal */}
+            {/* Removed the separate Buy Me a Coffee Section from here */}
+
+
             {isSignUpOpen && (
                 <div className="modal-overlay" onClick={handleCloseSignUp}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -455,11 +413,6 @@ const App: React.FC = () => {
                             <button type="submit" className="cta-btn submit-btn">Create Account</button>
                             <div className="form-divider"><span>OR</span></div>
                             <div className="social-signin-container">
-                                {/* Google Sign-In Button - Add back if needed
-                                <button type="button" className="social-btn google" onClick={handleGoogleSignIn}><FaGoogle size={18} style={{ marginRight: 8 }}/>
-                                    Sign up with Google
-                                </button>
-                                */}
                                 <button type="button" className="social-btn github" onClick={handleGithubOAuthSignIn}><FaGithub size={18} style={{ marginRight: 8 }}/>
                                     Sign up with GitHub
                                 </button>
@@ -470,7 +423,6 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Login Modal */}
             {isLoginOpen && (
                 <div className="modal-overlay" onClick={handleCloseLogin}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -485,11 +437,6 @@ const App: React.FC = () => {
                             <button type="submit" className="cta-btn submit-btn">Log In</button>
                             <div className="form-divider"><span>OR</span></div>
                             <div className="social-signin-container">
-                                {/* Google Sign-In Button - Add back if needed
-                                <button type="button" className="social-btn google" onClick={handleGoogleSignIn}><FaGoogle size={18} style={{ marginRight: 8 }}/>
-                                    Log in with Google
-                                </button>
-                                */}
                                 <button type="button" className="social-btn github" onClick={handleGithubOAuthSignIn}><FaGithub size={18} style={{ marginRight: 8 }}/>
                                     Log in with GitHub
                                 </button>
