@@ -1,5 +1,5 @@
 /* ==========================================
-   DocumentPage.tsx              ✨ 2025-05-01
+   EditDocument.tsx              ✨ 2025-05-01
    – Shows side-by-side Markdown preview
    – Always reloads the *latest* README.md
    – Commits reliably, dark-mode, etc.
@@ -17,7 +17,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import "../global-css/navbar.css";
-import "./CSS/DocPage.css";
+import "./CSS/EditDoc.css";
 
 import {
     FiFileText,
@@ -75,7 +75,7 @@ type FolderNode = {
 
 /* =================================================================== */
 
-const DocumentPage: React.FC = () => {
+const EditDocument: React.FC = () => {
     const navigate   = useNavigate();
     const location   = useLocation();
 
@@ -456,4 +456,4 @@ function FileNodeUI({ node }: { node: FolderNode | FileNode }) {
     );
 }
 
-export default DocumentPage;
+export default EditDocument;

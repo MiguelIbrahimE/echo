@@ -2,7 +2,7 @@
 import { createBrowserRouter } from 'react-router-dom'; // Ensure RouterProvider is used in your main.tsx
 import App from './App';
 import LinkGithubRepo from './SignedUp/LinkGithubRepo';
-import DocumentPage from './SignedUp/DocumentPage';
+import EditDocument from './SignedUp/EditDocument';
 import MyDocuments from './SignedUp/MyDocuments';
 import MyErrorBoundary from './MyErrorBoundary';
 import Settings from './SignedUp/Settings';
@@ -22,7 +22,7 @@ const router = createBrowserRouter([
     {
         /* main doc editor */
         path: '/document-page', // Consider using a param like /document/:docId or /document/:repo/:branch/:docType
-        element: <DocumentPage />,
+        element: <EditDocument />,
         errorElement: <MyErrorBoundary />,
     },
     {
