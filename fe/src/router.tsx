@@ -1,8 +1,8 @@
 // router.tsx (or your main frontend routing file)
-import { createBrowserRouter} from 'react-router-dom'; // Ensure RouterProvider is used in your main.tsx
+import { createBrowserRouter } from 'react-router-dom'; // Ensure RouterProvider is used in your main.tsx
 import App from './App';
 import LinkGithubRepo from './SignedUp/LinkGithubRepo';
-
+import DocumentPage from './SignedUp/DocumentPage';
 import MyDocuments from './SignedUp/MyDocuments';
 import MyErrorBoundary from './MyErrorBoundary';
 import Settings from './SignedUp/Settings';
@@ -19,7 +19,12 @@ const router = createBrowserRouter([
         element: <LinkGithubRepo />,
         errorElement: <MyErrorBoundary />, // Good to have error boundaries on more routes
     },
-
+    {
+        /* main doc editor */
+        path: '/document-page', // Consider using a param like /document/:docId or /document/:repo/:branch/:docType
+        element: <DocumentPage />,
+        errorElement: <MyErrorBoundary />,
+    },
     {
         /* dashboard */
         path: '/dashboard', // It's good to have a consistent primary path
