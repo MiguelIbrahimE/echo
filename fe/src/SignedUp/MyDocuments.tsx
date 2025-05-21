@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
-import './CSS/mydocuments.css';            // card styles
+import './CSS/MyDocuments.css';            // card styles
 import '../global-css/navbar-signedin.css'; // signed-in navbar
 
 interface Doc {
