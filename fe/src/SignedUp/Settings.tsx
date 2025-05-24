@@ -107,7 +107,7 @@ const Settings: React.FC = () => {
         }
     };
 
-    const [alertMessage, setAlertMessage] = useState<string | null>(null);
+    const [alertMessage] = useState<string | null>(null);
     // showAlertModal can be used if you implement a modal
     // const showAlertModal = (message: string) => setAlertMessage(message);
 

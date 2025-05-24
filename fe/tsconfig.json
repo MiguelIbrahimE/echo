@@ -1,17 +1,25 @@
+// be/tsconfig.json
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "target": "es2020", // Or your preferred Node.js compatible target
+    "module": "commonjs", // Common for Node.js backend, or ESNext if you use ESM
+    "outDir": "./dist",   // Or your build output directory
+    "rootDir": "./src",
     "strict": true,
-    "types": ["node", "jest", "@testing-library/jest-dom"],
-    "moduleResolution": "bundler", // Keep this for Vite
-    "jsx": "react-jsx",
-    "noEmit": true,
-
-    // ✅ Required for ts-jest compatibility
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "esModuleInterop": true, // Important for compatibility
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    // Add typeRoots if your custom types are in a specific folder and not automatically picked up
+    // "typeRoots": ["./node_modules/@types", "./src/types"],
+    "baseUrl": "./src", // Optional: if you use path aliases
+    // ... any other backend-specific compiler options
   },
-  "include": ["src"]
+  "include": [
+    "src/**/*" // This should include src/types/express/index.d.ts
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
