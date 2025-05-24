@@ -427,7 +427,6 @@ const App: React.FC = () => {
                 <div className="modal-overlay" onClick={handleCloseLogin}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <button className="close-btn" onClick={handleCloseLogin} aria-label="Close login form">×</button>
-                        <div className="thank-you-section"><p className="thank-you-text">Welcome Back!</p></div>
                         <form onSubmit={handleLoginSubmit} className="login-form" noValidate>
                             <h3 style={{textAlign: 'center', marginBottom: '20px'}}>Log in to Echo</h3>
                             <label htmlFor="loginUsername" className="login-label">Username or Email <span className="required-asterisk">*</span></label>

@@ -6,7 +6,7 @@ import dotenv  from 'dotenv';
 dotenv.config();
 import repositoriesRouter from './routes/repositoriesRouter';
 import authRouter          from './auth/authRouter'; // Main auth router
-import documentsRouter     from './routes/documentsRouter';
+import documentsRouter     from './routes/userManualRouter';
 // import githubAuthRouter    from './routes/githubAuthRouter'; // <-- REMOVE OR COMMENT OUT
 import userSettingsRouter  from './routes/userSettingsRouter';
 

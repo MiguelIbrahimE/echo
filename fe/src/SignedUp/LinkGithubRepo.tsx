@@ -68,25 +68,26 @@ const LinkGithubRepo: React.FC = () => {
 
         /* 1 ▸ save / update repo for this user ---------------- */
         try {
-            await fetch(`${import.meta.env.VITE_API_BASE_URL}/repositories`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${jwt}`,
-                },
-                body: JSON.stringify({
-                    repoFullName: repoFull,
-                    githubToken: token,
-                }),
-            });
+            await fetch(`${import.meta.env.VITE_API_BASE_URL}/repositories`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${jwt}`,
+                    },
+                    body: JSON.stringify({
+                        repoFullName: repoFull,
+                        githubToken: token,
+                    }),
+                });
         } catch (e) {
             console.warn("Repo save failed (continuing)…", e);
         }
 
         /* 2 ▸ create (or retrieve existing) blank manual ------- */
         try {
-            const title   = `Manual – ${repoFull.split("/")[1]}`;
-            const docRes  = await fetch(
+            const title = `Manual – ${repoFull.split("/")[1]}`;
+            const docRes = await fetch(
                 `${import.meta.env.VITE_API_BASE_URL}/documents`,
                 {
                     method: "POST",
@@ -98,7 +99,8 @@ const LinkGithubRepo: React.FC = () => {
                         title,
                         content: "",
                         repoFullName: repoFull,
-                        branchName : defaultBranch,
+                        branchName: defaultBranch,
+                        docType: "USER_MANUAL" // Add docType field
                     }),
                 }
             );

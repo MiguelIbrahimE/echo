@@ -1,22 +1,23 @@
-// be/tsconfig.json
 {
   "compilerOptions": {
-    "target": "es2020", // Or your preferred Node.js compatible target
-    "module": "commonjs", // Common for Node.js backend, or ESNext if you use ESM
-    "outDir": "./dist",   // Or your build output directory
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
-    "esModuleInterop": true, // Important for compatibility
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    // Add typeRoots if your custom types are in a specific folder and not automatically picked up
-    // "typeRoots": ["./node_modules/@types", "./src/types"],
-    "baseUrl": "./src", // Optional: if you use path aliases
-    // ... any other backend-specific compiler options
+    "jsx": "react-jsx",
+    "moduleResolution": "node",
+    "baseUrl": "./src",
+    "paths": {
+      "*": ["node_modules/*"]
+    }
   },
   "include": [
-    "src/**/*" // This should include src/types/express/index.d.ts
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
