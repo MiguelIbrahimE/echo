@@ -41,7 +41,6 @@ services:
       DB_PASS: postgres
       DB_NAME: echodb
       DB_PORT: 5432
-      GPT_API_KEY: ${GPT_API_KEY}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
       JWT_SECRET: ${JWT_SECRET}
