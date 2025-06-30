@@ -58,4 +58,5 @@ CREATE TABLE IF NOT EXISTS document_shares (
   shared_with_user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   permission VARCHAR(50) NOT NULL DEFAULT 'view'
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_docshare_unique ON document_shares(document_id, shared_with_user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_docshare_unique
+  ON document_shares(document_id, shared_with_user_id);

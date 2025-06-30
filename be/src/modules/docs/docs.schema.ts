@@ -1,3 +1,4 @@
+//docs.schema.ts
 import { z } from "zod";
 export const docType = z.enum([
   "API_REFERENCE",

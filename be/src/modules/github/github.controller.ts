@@ -1,3 +1,4 @@
+//github.controller.ts
 import { Request, Response } from "express";
 import { githubService } from "./github.service";
 

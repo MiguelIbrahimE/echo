@@ -1,3 +1,4 @@
+//routes.ts
 import { Router } from "express";
 import { authRouter } from "@modules/auth/auth.router";
 import { docsRouter } from "@modules/docs/docs.router";

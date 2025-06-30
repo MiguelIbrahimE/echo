@@ -1,3 +1,4 @@
+//settings.service.ts
 import { db } from "@common/db";
 import { settings } from "@schema";
 

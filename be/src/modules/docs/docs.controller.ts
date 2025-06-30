@@ -1,3 +1,4 @@
+//docs.controller.ts
 import { Request, Response } from "express";
 import { createDocSchema } from "./docs.schema";
 import { docsService } from "./docs.service";
